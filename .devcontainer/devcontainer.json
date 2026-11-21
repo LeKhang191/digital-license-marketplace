@@ -1,25 +1,38 @@
+
 {
   "name": "Digital License Marketplace",
+
   "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
+
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
-  "forwardPorts": [8000, 8080, 15672],
+
+  "forwardPorts": [
+    8000,
+    8080,
+    15672
+  ],
+
   "portsAttributes": {
     "8000": {
-      "label": "Gateway API",
+      "label": "API Gateway",
       "onAutoForward": "notify",
       "visibility": "private"
     },
+
     "8080": {
       "label": "Keycloak",
       "visibility": "private"
     },
+
     "15672": {
-      "label": "RabbitMQ",
+      "label": "RabbitMQ Management",
       "visibility": "private"
     }
   },
+
   "postCreateCommand": "bash scripts/install.sh",
+
   "remoteUser": "vscode"
 }

@@ -3,29 +3,72 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d catalog_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks:
+      - backend
+    restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:15672:15672"
+    networks:
+      - backend
+    restart: unless-stopped
 
   keycloak:
     image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
     command: start-dev
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_PASSWORD}
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - kc_data:/opt/keycloak/data
+    networks:
+      - backend
+    restart: unless-stopped
+
+  catalog:
+    build:
+      context: .
+      dockerfile: services/catalog-service/Dockerfile
+    environment:
+      ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Database=catalog_db;Username=app;Password=${DB_PASSWORD}"
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
     ports:
-      - "8080:8080"
+      - "8000:8080"
+    depends_on:
+      - catalog
+    networks:
+      - backend
+    restart: unless-stopped
+
+networks:
+  backend:
 
 volumes:
   pg_data:

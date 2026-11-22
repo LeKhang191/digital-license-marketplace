@@ -12,4 +12,3 @@ public sealed class VnPayOptions
 
     public string Locale { get; set; } = "vn";
     public int ExpireMinutes { get; set; } = 15;
-}

@@ -22,7 +22,8 @@ public sealed record OrderResponse(
     string Status,
     decimal TotalAmount,
     DateTime CreatedAtUtc,
-    IReadOnlyList<OrderItemResponse> Items)
+    IReadOnlyList<OrderItemResponse> Items,
+    string? PaymentUrl = null)
 {
     public static OrderResponse From(Order o) => new(
         o.Id,

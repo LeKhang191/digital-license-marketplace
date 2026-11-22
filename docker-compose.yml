@@ -33,9 +33,7 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_PASSWORD}
-      # Issuer cố định theo địa chỉ trình duyệt/máy host dùng
       KC_HOSTNAME: http://localhost:8081
-      # Cho phép service trong Docker gọi Keycloak qua http://keycloak:8080
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
       - "127.0.0.1:8081:8080"
@@ -70,6 +68,12 @@ services:
     environment:
       ConnectionStrings__OrderDb: "Host=postgres;Port=5432;Database=order_db;Username=app;Password=${DB_PASSWORD}"
       Services__CatalogUrl: "http://catalog:8080"
+      VnPay__TmnCode: ${VNPAY_TMN_CODE:-}
+      VnPay__HashSecret: ${VNPAY_HASH_SECRET:-}
+      VnPay__ReturnUrl: ${VNPAY_RETURN_URL:-http://localhost:5173/payment/result}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
       Keycloak__Issuer: "http://localhost:8081/realms/marketplace"
     depends_on:
@@ -78,6 +82,8 @@ services:
       catalog:
         condition: service_started
       keycloak:
+        condition: service_started
+      rabbitmq:
         condition: service_started
     networks:
       - backend

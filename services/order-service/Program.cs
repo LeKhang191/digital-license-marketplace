@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using OrderService.Application.Services;
 using OrderService.Infrastructure.Catalog;
+using OrderService.Infrastructure.Messaging;
 using OrderService.Infrastructure.Persistence;
 using OrderService.Infrastructure.Security;
+using OrderService.Infrastructure.VnPay;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,7 +26,15 @@ builder.Services.AddHttpClient<ICatalogClient, CatalogClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 
+builder.Services.Configure<VnPayOptions>(
+    builder.Configuration.GetSection("VnPay"));
+builder.Services.Configure<RabbitMqOptions>(
+    builder.Configuration.GetSection("RabbitMq"));
+
+builder.Services.AddSingleton<VnPayService>();
+builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddScoped<IOrderManager, OrderManager>();
+builder.Services.AddScoped<VnPayIpnHandler>();
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();

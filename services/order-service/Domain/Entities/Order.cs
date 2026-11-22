@@ -14,5 +14,15 @@ public sealed class Order
     public string Status { get; set; } = OrderStatus.Pending;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    // ---- Thanh toán VNPay ----
+    // vnp_TxnRef của lần thanh toán hiện tại: 32 ký tự đầu = Id đơn (dạng N)
+    public string? PaymentRef { get; set; }
+    public string? VnpTransactionNo { get; set; }
+    public string? VnpPayDate { get; set; }
+    public DateTime? PaidAtUtc { get; set; }
+
+    // Đã phát OrderPaidEvent lên RabbitMQ chưa (để IPN gọi lại thì phát bù)
+    public DateTime? PaidEventSentAtUtc { get; set; }
+
     public List<OrderItem> Items { get; set; } = new();
 }

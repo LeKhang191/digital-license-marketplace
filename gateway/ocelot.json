@@ -15,6 +15,21 @@
       "UpstreamHttpMethod": ["GET", "POST"]
     },
     {
+      "DownstreamPathTemplate": "/api/orders/vnpay-ipn",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/orders/vnpay-ipn",
+      "UpstreamHttpMethod": ["GET"],
+      "Priority": 1
+    },
+    {
+      "DownstreamPathTemplate": "/api/orders/{id}/pay",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/orders/{id}/pay",
+      "UpstreamHttpMethod": ["POST"]
+    },
+    {
       "DownstreamPathTemplate": "/api/orders/{id}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],

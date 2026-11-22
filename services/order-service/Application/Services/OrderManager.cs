@@ -3,14 +3,26 @@ using OrderService.Application.DTOs;
 using OrderService.Domain.Entities;
 using OrderService.Infrastructure.Catalog;
 using OrderService.Infrastructure.Persistence;
+using OrderService.Infrastructure.VnPay;
 
 namespace OrderService.Application.Services;
+
+public static class OrderErrors
+{
+    public const string ProductNotFound = "Product not found";
+    public const string OrderNotFound = "Order not found";
+    public const string NotPayable = "Order is not payable";
+    public const string PaymentNotConfigured = "PAYMENT_NOT_CONFIGURED";
+}
 
 public interface IOrderManager
 {
     Task<(OrderResponse? Order, string? Error)> CreateAsync(
-        string userId, string? email,
-        CreateOrderRequest request, CancellationToken ct);
+        string userId, string? email, CreateOrderRequest request,
+        string clientIp, CancellationToken ct);
+
+    Task<(OrderResponse? Order, string? Error)> PayAsync(
+        string userId, Guid id, string clientIp, CancellationToken ct);
 
     Task<IReadOnlyList<OrderResponse>> ListAsync(
         string userId, CancellationToken ct);
@@ -21,17 +33,24 @@ public interface IOrderManager
 
 public sealed class OrderManager(
     OrderDbContext db,
-    ICatalogClient catalog
+    ICatalogClient catalog,
+    VnPayService vnpay
 ) : IOrderManager
 {
+    private static string NewPaymentRef(Guid orderId) =>
+        orderId.ToString("N") + DateTime.UtcNow.ToString("yyMMddHHmmss");
+
     public async Task<(OrderResponse? Order, string? Error)> CreateAsync(
-        string userId, string? email,
-        CreateOrderRequest request, CancellationToken ct)
+        string userId, string? email, CreateOrderRequest request,
+        string clientIp, CancellationToken ct)
     {
+        if (!vnpay.IsConfigured)
+            return (null, OrderErrors.PaymentNotConfigured);
+
         var product = await catalog.GetProductAsync(request.ProductId, ct);
 
         if (product is null || !product.IsActive)
-            return (null, "Product not found");
+            return (null, OrderErrors.ProductNotFound);
 
         var order = new Order
         {
@@ -40,6 +59,7 @@ public sealed class OrderManager(
             Status = OrderStatus.Pending,
             TotalAmount = product.Price * request.Quantity
         };
+        order.PaymentRef = NewPaymentRef(order.Id);
 
         for (var i = 0; i < request.Quantity; i++)
         {
@@ -54,7 +74,30 @@ public sealed class OrderManager(
         db.Orders.Add(order);
         await db.SaveChangesAsync(ct);
 
-        return (OrderResponse.From(order), null);
+        var url = vnpay.CreatePaymentUrl(order, clientIp);
+        return (OrderResponse.From(order) with { PaymentUrl = url }, null);
+    }
+
+    public async Task<(OrderResponse? Order, string? Error)> PayAsync(
+        string userId, Guid id, string clientIp, CancellationToken ct)
+    {
+        if (!vnpay.IsConfigured)
+            return (null, OrderErrors.PaymentNotConfigured);
+
+        var order = await db.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(
+                o => o.Id == id && o.KeycloakUserId == userId, ct);
+
+        if (order is null) return (null, OrderErrors.OrderNotFound);
+        if (order.Status != OrderStatus.Pending)
+            return (null, OrderErrors.NotPayable);
+
+        order.PaymentRef = NewPaymentRef(order.Id);
+        await db.SaveChangesAsync(ct);
+
+        var url = vnpay.CreatePaymentUrl(order, clientIp);
+        return (OrderResponse.From(order) with { PaymentUrl = url }, null);
     }
 
     public async Task<IReadOnlyList<OrderResponse>> ListAsync(

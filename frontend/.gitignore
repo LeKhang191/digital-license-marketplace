@@ -1,7 +1,12 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Environment
 .env.local
 *.local
-
 .env.*
 !.env.example

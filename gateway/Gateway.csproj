@@ -10,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="ocelot.json"
+    <Content Update="ocelot.json"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

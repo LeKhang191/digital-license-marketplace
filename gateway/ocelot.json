@@ -3,19 +3,29 @@
     {
       "DownstreamPathTemplate": "/api/products/{everything}",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        { "Host": "catalog", "Port": 8080 }
-      ],
+      "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/catalog/products/{everything}",
       "UpstreamHttpMethod": ["GET", "PUT", "DELETE"]
     },
     {
       "DownstreamPathTemplate": "/api/products",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        { "Host": "catalog", "Port": 8080 }
-      ],
+      "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/catalog/products",
+      "UpstreamHttpMethod": ["GET", "POST"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/orders/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/orders/{id}",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/orders",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/orders",
       "UpstreamHttpMethod": ["GET", "POST"]
     }
   ],

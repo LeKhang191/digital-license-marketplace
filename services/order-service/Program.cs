@@ -1,23 +1,48 @@
+using Microsoft.EntityFrameworkCore;
+using OrderService.Application.Services;
+using OrderService.Infrastructure.Catalog;
+using OrderService.Infrastructure.Persistence;
+using OrderService.Infrastructure.Security;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+var connectionString = builder.Configuration
+    .GetConnectionString("OrderDb")
+    ?? throw new InvalidOperationException(
+        "OrderDb connection string is missing");
+
+var catalogUrl = builder.Configuration["Services:CatalogUrl"]
+    ?? throw new InvalidOperationException(
+        "Services:CatalogUrl is missing");
+
+builder.Services.AddDbContext<OrderDbContext>(
+    options => options.UseNpgsql(connectionString));
+
+builder.Services.AddHttpClient<ICatalogClient, CatalogClient>(client =>
+{
+    client.BaseAddress = new Uri(catalogUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+builder.Services.AddScoped<IOrderManager, OrderManager>();
+builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Dev only. Thay bằng EF migrations sau.
+using (var scope = app.Services.CreateScope())
 {
-    app.MapOpenApi();
+    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+    await db.Database.EnsureCreatedAsync();
 }
 
-app.UseHttpsRedirection();
-
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();

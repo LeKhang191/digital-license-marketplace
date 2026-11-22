@@ -63,6 +63,26 @@ services:
       - backend
     restart: unless-stopped
 
+  order:
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    environment:
+      ConnectionStrings__OrderDb: "Host=postgres;Port=5432;Database=order_db;Username=app;Password=${DB_PASSWORD}"
+      Services__CatalogUrl: "http://catalog:8080"
+      Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
+      Keycloak__Issuer: "http://localhost:8081/realms/marketplace"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    networks:
+      - backend
+    restart: unless-stopped
+
   gateway:
     build:
       context: .
@@ -71,6 +91,7 @@ services:
       - "8000:8080"
     depends_on:
       - catalog
+      - order
     networks:
       - backend
     restart: unless-stopped

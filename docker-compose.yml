@@ -29,14 +29,19 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
-    command: start-dev
+    command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_PASSWORD}
+      # Issuer cố định theo địa chỉ trình duyệt/máy host dùng
+      KC_HOSTNAME: http://localhost:8081
+      # Cho phép service trong Docker gọi Keycloak qua http://keycloak:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - kc_data:/opt/keycloak/data
+      - ./infra/keycloak/marketplace-realm.json:/opt/keycloak/data/import/marketplace-realm.json:ro
     networks:
       - backend
     restart: unless-stopped
@@ -47,10 +52,13 @@ services:
       dockerfile: services/catalog-service/Dockerfile
     environment:
       ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Database=catalog_db;Username=app;Password=${DB_PASSWORD}"
-      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
+      Keycloak__Issuer: "http://localhost:8081/realms/marketplace"
     depends_on:
       postgres:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     networks:
       - backend
     restart: unless-stopped

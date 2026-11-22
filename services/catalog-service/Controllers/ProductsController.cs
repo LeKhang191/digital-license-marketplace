@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Catalog.Api.Application.DTOs;
 using Catalog.Api.Application.Interfaces;
 using Catalog.Api.Infrastructure.Security;
@@ -39,7 +40,7 @@ public sealed class ProductsController(
     }
 
     [HttpPost]
-    [ServiceFilter(typeof(AdminApiKeyFilter))]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create(
         [FromBody] ProductUpsertRequest request,
         CancellationToken ct)
@@ -57,7 +58,7 @@ public sealed class ProductsController(
     }
 
     [HttpPut("{id:guid}")]
-    [ServiceFilter(typeof(AdminApiKeyFilter))]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] ProductUpsertRequest request,
@@ -75,7 +76,7 @@ public sealed class ProductsController(
     }
 
     [HttpDelete("{id:guid}")]
-    [ServiceFilter(typeof(AdminApiKeyFilter))]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(
         Guid id,
         CancellationToken ct)

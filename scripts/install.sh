@@ -1,8 +1,6 @@
 
 #!/usr/bin/env bash
 set -Eeuo pipefail
-
-# Chuyển tới thư mục gốc dự án
 cd "$(dirname "$0")/.."
 
 echo "================================="

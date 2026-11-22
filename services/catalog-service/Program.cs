@@ -16,7 +16,7 @@ builder.Services.AddDbContext<CatalogDbContext>(
 );
 
 builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<AdminApiKeyFilter>();
+builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
@@ -32,6 +32,9 @@ using (var scope = app.Services.CreateScope())
 
     await db.Database.EnsureCreatedAsync();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapHealthChecks("/health");

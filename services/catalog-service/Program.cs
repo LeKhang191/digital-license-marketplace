@@ -23,15 +23,9 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Database initialization for development.
-// Replace EnsureCreated with EF migrations later.
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider
-        .GetRequiredService<CatalogDbContext>();
-
-    await db.Database.EnsureCreatedAsync();
-}
+// Schema is managed explicitly by EF Core migrations (see docs/DATABASE_MIGRATIONS.md).
+// Do not call EnsureCreated() or auto-migrate at application startup.
+// This keeps read/write application credentials separate from schema-change operations.
 
 app.UseAuthentication();
 app.UseAuthorization();

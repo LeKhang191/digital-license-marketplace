@@ -488,3 +488,6 @@ $RECYCLE.BIN/
 # Local database snapshots and binary exports
 backups/
 *.dump
+
+# Compressed SQL backups (never commit)
+*.sql.gz

@@ -40,3 +40,7 @@ bash scripts/test-vnpay.sh
 ## Audit và kế hoạch sửa lỗi
 
 Đọc [docs/REFACTOR_AUDIT.md](docs/REFACTOR_AUDIT.md) trước khi cập nhật database hoặc triển khai thanh toán.
+
+## EF Core migrations (phase 2)
+
+See [docs/DATABASE_MIGRATIONS.md](docs/DATABASE_MIGRATIONS.md). Existing databases created by `EnsureCreated` require an explicitly verified baseline; never run `InitialCreate` against populated tables.

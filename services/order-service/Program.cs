@@ -42,12 +42,9 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Dev only. Thay bằng EF migrations sau.
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
-    await db.Database.EnsureCreatedAsync();
-}
+// Schema is managed explicitly by EF Core migrations (see docs/DATABASE_MIGRATIONS.md).
+// Do not call EnsureCreated() or auto-migrate at application startup.
+// This keeps read/write application credentials separate from schema-change operations.
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -38,7 +38,6 @@ RABBITMQ_USER=marketplace
 RABBITMQ_PASSWORD=$(openssl rand -hex 20)
 KC_PASSWORD=$(openssl rand -hex 20)
 KEYCLOAK_VERSION=26.8.2
-ADMIN_API_KEY=$(openssl rand -hex 32)
 EOF
 
     echo ".env created successfully."

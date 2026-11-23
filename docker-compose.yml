@@ -19,8 +19,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
     ports:
       - "127.0.0.1:15672:15672"
     networks:
@@ -28,11 +28,11 @@ services:
     restart: unless-stopped
 
   keycloak:
-    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION:?KEYCLOAK_VERSION required}
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_PASSWORD:?KC_PASSWORD required}
       KC_HOSTNAME: http://localhost:8081
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
@@ -72,8 +72,8 @@ services:
       VnPay__HashSecret: ${VNPAY_HASH_SECRET:-}
       VnPay__ReturnUrl: ${VNPAY_RETURN_URL:-http://localhost:5173/payment/result}
       RabbitMq__Host: rabbitmq
-      RabbitMq__User: ${RABBITMQ_USER}
-      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      RabbitMq__User: ${RABBITMQ_USER:?RABBITMQ_USER required}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
       Keycloak__Issuer: "http://localhost:8081/realms/marketplace"
     depends_on:

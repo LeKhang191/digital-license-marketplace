@@ -52,7 +52,9 @@ public sealed class RabbitMqPublisher(
             await channel.BasicPublishAsync(
                 exchange: o.Exchange,
                 routingKey: routingKey,
-                mandatory: false,
+                // true: nếu chưa có queue nào bind với routingKey, broker trả
+                // tin lại để PublishAsync báo lỗi thay vì âm thầm bỏ tin.
+                mandatory: true,
                 basicProperties: props,
                 body: body,
                 cancellationToken: ct);

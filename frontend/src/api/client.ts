@@ -17,7 +17,10 @@ export async function api<T>(
 
   if (init.auth) {
     const token = await getToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+    // Không gửi request cần đăng nhập mà thiếu token (getToken đã chuyển
+    // hướng sang trang đăng nhập khi phiên hết hạn).
+    if (!token) throw new ApiError(401, "Phiên đăng nhập đã hết hạn");
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const res = await fetch(`${config.apiUrl}${path}`, { ...init, headers });

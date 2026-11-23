@@ -33,7 +33,12 @@ public sealed class OrdersController(
             return CreatedAtAction(
                 nameof(Get), new { id = order!.Id }, order);
         }
-        catch (HttpRequestException)
+        // Timeout của HttpClient ném TaskCanceledException (không phải
+        // HttpRequestException). Chỉ coi là Catalog lỗi khi chính client
+        // không hủy request; nếu client hủy thì để ASP.NET xử lý.
+        catch (Exception ex) when (
+            ex is HttpRequestException ||
+            (ex is OperationCanceledException && !ct.IsCancellationRequested))
         {
             return StatusCode(503,
                 new { error = "Catalog service unavailable" });

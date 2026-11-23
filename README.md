@@ -37,3 +37,6 @@ bash scripts/test-auth.sh
 bash scripts/test-orders.sh
 bash scripts/test-vnpay.sh
 ```
+## Audit và kế hoạch sửa lỗi
+
+Đọc [docs/REFACTOR_AUDIT.md](docs/REFACTOR_AUDIT.md) trước khi cập nhật database hoặc triển khai thanh toán.

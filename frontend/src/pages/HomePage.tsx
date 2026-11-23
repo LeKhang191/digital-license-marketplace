@@ -13,12 +13,16 @@ export function HomePage() {
   useEffect(() => {
     setError(null);
     // Chờ 300ms sau khi người dùng ngừng gõ rồi mới gọi API
+    let active = true;
     const t = setTimeout(() => {
       listProducts({ search, category, page })
-        .then(setData)
-        .catch((e: Error) => setError(e.message));
+        .then((result) => { if (active) setData(result); })
+        .catch((e: Error) => { if (active) setError(e.message); });
     }, 300);
-    return () => clearTimeout(t);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
   }, [search, category, page]);
 
   const lastPage = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;

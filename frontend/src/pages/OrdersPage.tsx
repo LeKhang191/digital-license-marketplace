@@ -9,6 +9,7 @@ export function OrdersPage() {
   const { ready, authenticated, login } = useAuth();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -16,11 +17,17 @@ export function OrdersPage() {
   }, [authenticated]);
 
   async function repay(id: string) {
+    if (payingId) return;
+    setPayingId(id);
+    setError(null);
     try {
       const order = await payOrder(id);
-      if (order.paymentUrl) window.location.href = order.paymentUrl;
+      if (!order.paymentUrl) throw new Error("Không nhận được liên kết thanh toán");
+      window.location.href = order.paymentUrl;
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setPayingId(null);
     }
   }
 
@@ -53,8 +60,8 @@ export function OrdersPage() {
               {o.items.length} sản phẩm · {new Date(o.createdAtUtc).toLocaleString("vi-VN")}
             </div>
             {o.status === "PENDING" && (
-              <button className="btn" style={{ marginTop: 12 }} onClick={() => repay(o.id)}>
-                Thanh toán lại
+              <button className="btn" style={{ marginTop: 12 }} disabled={payingId !== null} onClick={() => repay(o.id)}>
+                {payingId === o.id ? "Đang tạo liên kết..." : "Thanh toán lại"}
               </button>
             )}
             {/* TODO: hiển thị Key khi License Vault sẵn sàng (đơn COMPLETED) */}

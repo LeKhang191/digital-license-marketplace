@@ -14,9 +14,34 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [, setAuthVersion] = useState(0);
 
   useEffect(() => {
-    initKeycloak().finally(() => setReady(true));
+    let mounted = true;
+    const sync = () => { if (mounted) setAuthVersion((v) => v + 1); };
+    keycloak.onAuthSuccess = sync;
+    keycloak.onAuthRefreshSuccess = sync;
+    keycloak.onAuthLogout = sync;
+    keycloak.onAuthError = sync;
+    keycloak.onAuthRefreshError = sync;
+    keycloak.onTokenExpired = () => {
+      void keycloak.updateToken(30).then(sync).catch(sync);
+    };
+    void initKeycloak().catch(sync).finally(() => {
+      if (mounted) {
+        setReady(true);
+        sync();
+      }
+    });
+    return () => {
+      mounted = false;
+      keycloak.onAuthSuccess = undefined;
+      keycloak.onAuthRefreshSuccess = undefined;
+      keycloak.onAuthLogout = undefined;
+      keycloak.onAuthError = undefined;
+      keycloak.onAuthRefreshError = undefined;
+      keycloak.onTokenExpired = undefined;
+    };
   }, []);
 
   const roles = keycloak.tokenParsed?.realm_access?.roles ?? [];

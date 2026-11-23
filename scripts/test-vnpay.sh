@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Mô phỏng VNPay gọi IPN (có ký HMAC-SHA512 bằng HashSecret trong .env)
 # và kiểm tra: trạng thái đơn, chống gọi trùng, chữ ký sai, sự kiện RabbitMQ.
-set -u
+set -euo pipefail
+# Credentials are supplied at runtime; never embed demo passwords in Git.
+: "${TEST_ADMIN_USER:?Set TEST_ADMIN_USER}"
+: "${TEST_ADMIN_PASSWORD:?Set TEST_ADMIN_PASSWORD}"
+: "${TEST_CUSTOMER_USER:?Set TEST_CUSTOMER_USER}"
+: "${TEST_CUSTOMER_PASSWORD:?Set TEST_CUSTOMER_PASSWORD}"
 cd "$(dirname "$0")/.."
 
 envget() { grep -E "^$1=" .env | head -1 | cut -d= -f2-; }
@@ -13,10 +18,10 @@ KC=http://localhost:8081/realms/marketplace/protocol/openid-connect/token
 GW=http://localhost:8000/api
 MG=http://localhost:15672/api
 json="Content-Type: application/json"
-token() { curl -s -X POST "$KC" -d "client_id=marketplace-web&grant_type=password" -d "username=$1&password=$2" | sed -E 's/.*"access_token":"([^"]+)".*/\1/'; }
+token() { curl -s -X POST "$KC" -d "client_id=marketplace-web&grant_type=password" --data-urlencode "username=$1" --data-urlencode "password=$2" | sed -E 's/.*"access_token":"([^"]+)".*/\1/'; }
 first_id() { grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4; }
 
-ADMIN=$(token admin1 'Admin@123'); CUST=$(token customer1 'Customer@123')
+ADMIN=$(token "$TEST_ADMIN_USER" "$TEST_ADMIN_PASSWORD"); CUST=$(token "$TEST_CUSTOMER_USER" "$TEST_CUSTOMER_PASSWORD")
 [ ${#ADMIN} -gt 100 ] || { echo "Không lấy được token. Kiểm tra Keycloak."; exit 1; }
 
 # Hàng đợi tạm để đọc sự kiện order.paid
@@ -36,7 +41,7 @@ URL=$(echo "$RES" | grep -o '"paymentUrl":"[^"]*"' | cut -d'"' -f4 | sed 's/\\u0
 REF=$(echo "$URL" | grep -o 'vnp_TxnRef=[^&]*' | cut -d= -f2)
 echo "Đơn: $OID"
 echo "Link thanh toán (mở bằng trình duyệt để thử thanh toán thật ở sandbox):"
-echo "  $URL"
+echo "  [redacted: paymentUrl saved only in local process]"
 echo
 
 # Dựng IPN giả có chữ ký (các khóa đã xếp theo thứ tự chữ cái)

@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
+# Credentials are supplied at runtime; never embed demo passwords in Git.
+: "${TEST_ADMIN_USER:?Set TEST_ADMIN_USER}"
+: "${TEST_ADMIN_PASSWORD:?Set TEST_ADMIN_PASSWORD}"
+: "${TEST_CUSTOMER_USER:?Set TEST_CUSTOMER_USER}"
+: "${TEST_CUSTOMER_PASSWORD:?Set TEST_CUSTOMER_PASSWORD}"
 KC=http://localhost:8081/realms/marketplace/protocol/openid-connect/token
 GW=http://localhost:8000/api
 token() {
   curl -s -X POST "$KC" -d "client_id=marketplace-web&grant_type=password" \
-    -d "username=$1&password=$2" | sed -E 's/.*"access_token":"([^"]+)".*/\1/'
+    --data-urlencode "username=$1" --data-urlencode "password=$2" | sed -E 's/.*"access_token":"([^"]+)".*/\1/'
 }
 first_id() { grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4; }
 json="Content-Type: application/json"
 
-ADMIN=$(token admin1 'Admin@123'); CUST=$(token customer1 'Customer@123')
+ADMIN=$(token "$TEST_ADMIN_USER" "$TEST_ADMIN_PASSWORD"); CUST=$(token "$TEST_CUSTOMER_USER" "$TEST_CUSTOMER_PASSWORD")
 [ ${#ADMIN} -gt 100 ] || { echo "Không lấy được token. Kiểm tra Keycloak."; exit 1; }
 
 PID=$(curl -s -X POST $GW/catalog/products -H "Authorization: Bearer $ADMIN" -H "$json" \

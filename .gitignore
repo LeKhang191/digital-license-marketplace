@@ -484,3 +484,7 @@ $RECYCLE.BIN/
 
 .env.*
 !.env.example
+
+# Local database snapshots and binary exports
+backups/
+*.dump

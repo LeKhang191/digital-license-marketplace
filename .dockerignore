@@ -3,3 +3,7 @@
 .git/
 .env
 **/node_modules/
+
+.env.*
+backups/
+**/dist/

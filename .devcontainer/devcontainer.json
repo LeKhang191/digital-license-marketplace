@@ -5,22 +5,33 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "moby": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
     }
   },
-  "forwardPorts": [8000, 8080, 15672],
+  "forwardPorts": [
+    5173,
+    8000,
+    8081,
+    15672
+  ],
   "portsAttributes": {
+    "5173": {
+      "label": "React Frontend",
+      "onAutoForward": "notify"
+    },
     "8000": {
       "label": "API Gateway",
-      "onAutoForward": "notify",
-      "visibility": "private"
+      "onAutoForward": "notify"
     },
-    "8080": {
+    "8081": {
       "label": "Keycloak",
-      "visibility": "private"
+      "onAutoForward": "notify"
     },
     "15672": {
       "label": "RabbitMQ",
-      "visibility": "private"
+      "onAutoForward": "silent"
     }
   },
   "remoteUser": "vscode"

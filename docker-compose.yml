@@ -1,4 +1,19 @@
 services:
+  migrator:
+    profiles:
+      - migration
+    build:
+      context: .
+      dockerfile: infra/migrations/Dockerfile
+    environment:
+      CATALOG_CONNECTION: "Host=postgres;Port=5432;Database=catalog_db;Username=app;Password=${DB_PASSWORD}"
+      ORDER_CONNECTION: "Host=postgres;Port=5432;Database=order_db;Username=app;Password=${DB_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: "no"
   postgres:
     image: postgres:16
     environment:

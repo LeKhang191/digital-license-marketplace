@@ -49,9 +49,28 @@ fi
 echo "Validating Docker Compose..."
 docker compose config --quiet
 
-# Build và chạy container
-echo "Building and starting backend..."
-docker compose up -d --build
+
+# Khởi động infrastructure
+echo "[1/4] Starting infrastructure..."
+
+docker compose up -d --wait postgres
+docker compose up -d rabbitmq keycloak
+
+# Dừng backend nếu đang chạy
+echo "[2/4] Stopping application services..."
+
+docker compose stop gateway order catalog
+
+# Thực hiện database migration
+echo "[3/4] Applying database migrations..."
+
+bash scripts/migrate.sh
+
+# Build và khởi động backend
+echo "[4/4] Building and starting backend..."
+
+docker compose up -d --build catalog order gateway
+
 
 # Hiển thị trạng thái
 echo ""

@@ -1,5 +1,6 @@
+
 export const config = {
-  apiUrl: import.meta.env.VITE_API_URL as string,
+  apiUrl: (import.meta.env.VITE_API_URL || "/api") as string,
   keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL as string,
   realm: import.meta.env.VITE_KEYCLOAK_REALM as string,
   clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string,

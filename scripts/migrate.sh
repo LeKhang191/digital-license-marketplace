@@ -1,0 +1,94 @@
+
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+cd "$(dirname "$0")/.."
+
+CATALOG_MIGRATION="20261123061604_InitialCreate"
+ORDER_MIGRATION="20261123061608_InitialCreate"
+
+query_db() {
+    local database="$1"
+    local sql="$2"
+
+    docker compose exec -T postgres \
+        psql -X -U app -d "$database" \
+        -v ON_ERROR_STOP=1 -Atc "$sql"
+}
+
+check_database() {
+    local database="$1"
+    local migration="$2"
+
+    local table_count
+    local history_exists
+    local initial_applied
+
+    echo "[Check] Inspecting $database..."
+
+    table_count=$(query_db "$database" "
+        SELECT count(*)
+        FROM pg_catalog.pg_tables
+        WHERE schemaname = 'public';
+    ")
+
+    history_exists=$(query_db "$database" "
+        SELECT CASE
+            WHEN to_regclass('public.\"__EFMigrationsHistory\"')
+                 IS NULL THEN 0
+            ELSE 1
+        END;
+    ")
+
+    if [[ "$table_count" == "0" ]]; then
+        echo "[OK] $database is empty."
+        return 0
+    fi
+
+    if [[ "$history_exists" != "1" ]]; then
+        echo "[ERROR] $database has existing tables."
+        echo "[ERROR] Migration history is missing."
+        echo "Review docs/DATABASE_MIGRATIONS.md."
+        return 1
+    fi
+
+    initial_applied=$(query_db "$database" "
+        SELECT count(*)
+        FROM public.\"__EFMigrationsHistory\"
+        WHERE \"MigrationId\" = '$migration';
+    ")
+
+    if [[ "$initial_applied" != "1" ]]; then
+        echo "[ERROR] Initial migration is not recorded."
+        echo "Database: $database"
+        echo "Expected migration: $migration"
+        return 1
+    fi
+
+    echo "[OK] Initial migration is recorded."
+}
+
+echo "================================="
+echo " Database Migration"
+echo "================================="
+
+docker compose config --quiet
+
+echo "[1/4] Starting PostgreSQL..."
+docker compose up -d --wait postgres
+
+echo "[2/4] Checking databases..."
+check_database catalog_db "$CATALOG_MIGRATION"
+check_database order_db "$ORDER_MIGRATION"
+
+echo "[3/4] Building migration image..."
+docker compose --profile migration build migrator
+
+echo "[4/4] Applying migrations..."
+
+docker compose --profile migration run --rm migrator catalog
+docker compose --profile migration run --rm migrator order
+
+echo "================================="
+echo " Database migrations completed."
+echo "================================="

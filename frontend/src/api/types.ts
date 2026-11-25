@@ -39,3 +39,13 @@ export interface Order {
   items: OrderItem[];
   paymentUrl?: string | null;
 }
+
+
+export interface ProductUpsertRequest {
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  price: number;
+  isActive: boolean;
+}

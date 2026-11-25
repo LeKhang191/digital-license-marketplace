@@ -5,7 +5,7 @@ WORKDIR /src
 
 ENV PATH="/root/.dotnet/tools:${PATH}"
 
-RUN dotnet tool install --global dotnet-ef --version 10.0.3
+RUN dotnet tool install --global dotnet-ef --version 10.0.4
 
 COPY shared/Contracts/Contracts.csproj shared/Contracts/
 COPY services/catalog-service/Catalog.Api.csproj services/catalog-service/

@@ -134,6 +134,8 @@ public sealed class ProductService(
         Product product,
         ProductUpsertRequest request)
     {
+        if (request.ImportedMetadata is not null)
+            product.SteamMetadataJson = System.Text.Json.JsonSerializer.Serialize(request.ImportedMetadata);
         product.Name = request.Name.Trim();
         product.Slug = request.Slug.Trim();
         product.Description = request.Description.Trim();

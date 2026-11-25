@@ -68,6 +68,17 @@ export function ProductPage() {
         {error && <div className="alert" style={{ marginTop: 16 }}>{error}</div>}
       </div>
       </div>
+      {product.steam && <section className="steam-details card">
+        <h2>Thông tin game</h2>
+        <p>{product.steam.genres.join(" · ")}</p>
+        <p>Nhà phát triển: {product.steam.developers.join(", ") || "—"}</p>
+        <p>Nhà phát hành: {product.steam.publishers.join(", ") || "—"}</p>
+        <p>Ngày phát hành: {product.steam.releaseDate || "—"}</p>
+        <a href={`https://store.steampowered.com/app/${product.steam.appId}/`} target="_blank" rel="noopener noreferrer">Nguồn thông tin: Steam Store ↗</a>
+        {product.steam.trailerUrl && <video controls preload="none" src={product.steam.trailerUrl} />}
+        {!!product.steam.screenshots.length && <><h2>Hình ảnh trong game</h2><div className="steam-gallery">{product.steam.screenshots.map((url,i)=><a key={i} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Screenshot ${i+1}`} loading="lazy"/></a>)}</div></>}
+        <h2>Cấu hình PC</h2><div className="steam-requirements"><div><h3>Tối thiểu</h3><p>{product.steam.minimumRequirements || "Chưa có thông tin"}</p></div><div><h3>Khuyến nghị</h3><p>{product.steam.recommendedRequirements || "Chưa có thông tin"}</p></div></div>
+      </section>}
     </div>
   );
 }

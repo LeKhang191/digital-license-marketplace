@@ -8,7 +8,7 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d catalog_db"]
+      test: ["CMD-SHELL", "pg_isready -U app -d postgres"]
       interval: 5s
       timeout: 3s
       retries: 15
@@ -52,6 +52,9 @@ services:
       ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Database=catalog_db;Username=app;Password=${DB_PASSWORD}"
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
       Keycloak__Issuer: "http://localhost:8081/realms/marketplace"
+      GameMetadata__Provider: "${GAME_METADATA_PROVIDER:-Steam}"
+      Igdb__ClientId: "${IGDB_CLIENT_ID:-}"
+      Igdb__ClientSecret: "${IGDB_CLIENT_SECRET:-}"
     depends_on:
       postgres:
         condition: service_healthy

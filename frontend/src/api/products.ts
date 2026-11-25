@@ -10,3 +10,6 @@ export function listProducts(params: { search?: string; category?: string; page?
 }
 
 export const getProduct = (id: string) => api<Product>(`/catalog/products/${id}`);
+
+export const previewSteam = (app: string) => api<import("./types").SteamMetadata>(`/catalog/steam-import/preview?${new URLSearchParams({app})}`, { auth: true });
+export const importSteam = (app: string, price: number) => api<Product>("/catalog/steam-import", { method: "POST", auth: true, body: JSON.stringify({app, price}) });

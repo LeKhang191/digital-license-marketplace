@@ -1,54 +1,135 @@
 {
   "Routes": [
     {
+      "DownstreamPathTemplate": "/api/steam-import/preview",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "catalog",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/catalog/steam-import/preview",
+      "UpstreamHttpMethod": [
+        "GET"
+      ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/steam-import",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "catalog",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/catalog/steam-import",
+      "UpstreamHttpMethod": [
+        "POST"
+      ]
+    },
+    {
       "DownstreamPathTemplate": "/api/products/{everything}",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "catalog",
+          "Port": 8080
+        }
+      ],
       "UpstreamPathTemplate": "/api/catalog/products/{everything}",
-      "UpstreamHttpMethod": ["GET", "PUT", "DELETE"]
+      "UpstreamHttpMethod": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ]
     },
     {
       "DownstreamPathTemplate": "/api/products",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "catalog",
+          "Port": 8080
+        }
+      ],
       "UpstreamPathTemplate": "/api/catalog/products",
-      "UpstreamHttpMethod": ["GET", "POST"]
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ]
     },
     {
       "DownstreamPathTemplate": "/api/orders/vnpay-ipn",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
       "UpstreamPathTemplate": "/api/orders/vnpay-ipn",
-      "UpstreamHttpMethod": ["GET"],
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
       "Priority": 1
     },
     {
       "DownstreamPathTemplate": "/api/orders/{id}/keys",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
       "UpstreamPathTemplate": "/api/orders/{id}/keys",
-      "UpstreamHttpMethod": ["GET"]
+      "UpstreamHttpMethod": [
+        "GET"
+      ]
     },
     {
       "DownstreamPathTemplate": "/api/orders/{id}/pay",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
       "UpstreamPathTemplate": "/api/orders/{id}/pay",
-      "UpstreamHttpMethod": ["POST"]
+      "UpstreamHttpMethod": [
+        "POST"
+      ]
     },
     {
       "DownstreamPathTemplate": "/api/orders/{id}",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
       "UpstreamPathTemplate": "/api/orders/{id}",
-      "UpstreamHttpMethod": ["GET"]
+      "UpstreamHttpMethod": [
+        "GET"
+      ]
     },
     {
       "DownstreamPathTemplate": "/api/orders",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
       "UpstreamPathTemplate": "/api/orders",
-      "UpstreamHttpMethod": ["GET", "POST"]
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ]
     }
   ],
   "GlobalConfiguration": {

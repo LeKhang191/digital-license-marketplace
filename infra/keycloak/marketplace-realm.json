@@ -1,9 +1,12 @@
+
 {
   "realm": "marketplace",
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": true,
   "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
   "roles": {
     "realm": [
       {
@@ -11,11 +14,26 @@
         "description": "Khách hàng"
       },
       {
+        "name": "catalog_manager",
+        "description": "Quản lý danh mục sản phẩm"
+      },
+      {
+        "name": "license_coordinator",
+        "description": "Điều phối kho mã bản quyền"
+      },
+      {
+        "name": "transaction_auditor",
+        "description": "Kiểm toán giao dịch và hoàn tiền"
+      },
+      {
         "name": "admin",
-        "description": "Quản trị viên"
+        "description": "Legacy role - temporary compatibility"
       }
     ]
   },
+  "defaultRoles": [
+    "customer"
+  ],
   "clients": [
     {
       "clientId": "marketplace-web",

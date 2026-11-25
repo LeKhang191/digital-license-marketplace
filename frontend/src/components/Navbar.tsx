@@ -17,12 +17,15 @@ export function Navbar() {
 
   const roleLabels = [
     isCatalogManager ? "Catalog Manager" : null,
+
     isLicenseCoordinator
       ? "License Coordinator"
       : null,
+
     isTransactionAuditor
       ? "Transaction Auditor"
       : null,
+
     isCustomer ? "Customer" : null,
   ].filter(Boolean);
 
@@ -33,16 +36,32 @@ export function Navbar() {
           Digital License Marketplace
         </Link>
 
-        {isCustomer && (
-          <Link to="/orders">
-            Đơn hàng của tôi
-          </Link>
-        )}
+        {ready && authenticated && (
+          <>
+            {isCustomer && (
+              <Link to="/orders">
+                Đơn hàng của tôi
+              </Link>
+            )}
 
-        {isCatalogManager && (
-          <Link to="/admin">
-            Quản lý sản phẩm
-          </Link>
+            {isCatalogManager && (
+              <Link to="/admin">
+                Quản lý sản phẩm
+              </Link>
+            )}
+
+            {isLicenseCoordinator && (
+              <Link to="/licenses">
+                Kho License Key
+              </Link>
+            )}
+
+            {isTransactionAuditor && (
+              <Link to="/transactions">
+                Quản lý giao dịch
+              </Link>
+            )}
+          </>
         )}
 
         <span className="spacer" />

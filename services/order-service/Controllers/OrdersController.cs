@@ -8,7 +8,7 @@ namespace OrderService.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-[Authorize]
+[Authorize(Policy = "CustomerOnly")]
 public sealed class OrdersController(
     IOrderManager orders
 ) : ControllerBase

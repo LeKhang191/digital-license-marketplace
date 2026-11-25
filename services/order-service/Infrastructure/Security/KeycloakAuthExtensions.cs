@@ -1,3 +1,4 @@
+
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -48,8 +49,29 @@ public static class KeycloakAuthExtensions
 
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminOnly",
-                policy => policy.RequireRole("admin"));
+            // Legacy role compatibility
+            options.AddPolicy("AdminOnly", policy =>
+                policy.RequireRole("admin"));
+
+            // Only customers can purchase products
+            options.AddPolicy("CustomerOnly", policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.RequireRole("customer");
+
+                policy.RequireAssertion(context =>
+                    !context.User.IsInRole("catalog_manager") &&
+                    !context.User.IsInRole("license_coordinator") &&
+                    !context.User.IsInRole("transaction_auditor") &&
+                    !context.User.IsInRole("admin"));
+            });
+
+            // Reserved for transaction management
+            options.AddPolicy("TransactionAuditorOnly", policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.RequireRole("transaction_auditor");
+            });
         });
 
         return services;
@@ -57,22 +79,27 @@ public static class KeycloakAuthExtensions
 
     private static void AddRealmRoles(ClaimsPrincipal? principal)
     {
-        if (principal?.Identity is not ClaimsIdentity identity) return;
+        if (principal?.Identity is not ClaimsIdentity identity)
+            return;
 
         var raw = identity.FindFirst("realm_access")?.Value;
-        if (string.IsNullOrEmpty(raw)) return;
+
+        if (string.IsNullOrEmpty(raw))
+            return;
 
         using var doc = JsonDocument.Parse(raw);
 
         if (!doc.RootElement.TryGetProperty("roles", out var roles) ||
-            roles.ValueKind != JsonValueKind.Array) return;
+            roles.ValueKind != JsonValueKind.Array)
+            return;
 
         foreach (var role in roles.EnumerateArray())
         {
             var value = role.GetString();
 
             if (!string.IsNullOrEmpty(value))
-                identity.AddClaim(new Claim(ClaimTypes.Role, value));
+                identity.AddClaim(
+                    new Claim(ClaimTypes.Role, value));
         }
     }
 }

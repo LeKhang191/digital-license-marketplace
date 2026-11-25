@@ -108,3 +108,8 @@ input,select {background:#18191b;color:var(--color-text);border-color:var(--colo
 @media(max-width:1000px){.nav-inner{justify-content:center}.nav-actions{justify-content:center}.featured-product{flex-basis:160px}.catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.nav-inner{padding:9px;gap:8px}.nav-actions{gap:5px}.nav-search input{width:125px}.storefront{padding:20px 12px 45px}.featured-product{height:245px;flex:0 0 145px}.featured-product:hover{flex-grow:0}.featured-rail{min-height:0}.catalog-grid{grid-template-columns:1fr}.detail-layout{grid-template-columns:1fr}.detail-layout>.product-art{min-height:200px}.section-heading{font-size:15px}.container{padding:16px}.pagination{gap:8px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Purchased license panel */
+.order-key-panel { margin-top: 1rem; padding: 1rem; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; background: rgba(255,255,255,.045); }
+.order-key-row { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; padding: .75rem; border-radius: 8px; background: rgba(0,0,0,.2); }
+.order-key-row code { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: all; }

@@ -26,6 +26,12 @@ builder.Services.AddHttpClient<ICatalogClient, CatalogClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 
+builder.Services.AddHttpClient("LicenseVault", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:LicenseVaultUrl"] ?? "http://license-vault:8080");
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
 builder.Services.Configure<VnPayOptions>(
     builder.Configuration.GetSection("VnPay"));
 builder.Services.Configure<RabbitMqOptions>(
@@ -36,6 +42,7 @@ builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddScoped<IOrderManager, OrderManager>();
 builder.Services.AddScoped<VnPayIpnHandler>();
 builder.Services.AddHostedService<PaidOrderDispatchWorker>();
+builder.Services.AddHostedService<DeliveryResultWorker>();
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();

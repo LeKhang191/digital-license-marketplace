@@ -23,6 +23,13 @@
       "Priority": 1
     },
     {
+      "DownstreamPathTemplate": "/api/orders/{id}/keys",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/orders/{id}/keys",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
       "DownstreamPathTemplate": "/api/orders/{id}/pay",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],

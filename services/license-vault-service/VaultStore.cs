@@ -20,6 +20,7 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
               order_id uuid PRIMARY KEY, user_id text NOT NULL,
               delivered boolean NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
             );
+            ALTER TABLE vault_fulfillments ADD COLUMN IF NOT EXISTS event_sent_at timestamptz;
             """);
         await cmd.ExecuteNonQueryAsync();
     }
@@ -96,5 +97,66 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
         }
         await tx.CommitAsync(ct);
         return true;
+    }
+    // Existing delivered rows are automatically eligible for dispatch after upgrade.
+    public async Task<List<LicenseDeliveredEvent>> PendingDeliveriesAsync(CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("""
+            SELECT f.order_id, f.user_id, k.item_id, k.product_id
+            FROM (SELECT order_id,user_id FROM vault_fulfillments
+                  WHERE delivered AND event_sent_at IS NULL ORDER BY created_at,order_id LIMIT 100) f
+            JOIN vault_keys k ON k.order_id=f.order_id
+            ORDER BY f.order_id,k.item_id
+            """);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new Dictionary<Guid, (string User, List<OrderItemRef> Items)>();
+        while (await reader.ReadAsync(ct))
+        {
+            var id = reader.GetGuid(0);
+            if (!rows.TryGetValue(id, out var row))
+                rows[id] = row = (reader.GetString(1), new List<OrderItemRef>());
+            row.Items.Add(new(reader.GetGuid(2), reader.GetGuid(3)));
+        }
+        return rows.Select(r => new LicenseDeliveredEvent(r.Key, r.Value.User, r.Value.Items)).ToList();
+    }
+
+    public async Task MarkDeliverySentAsync(Guid id, CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("UPDATE vault_fulfillments SET event_sent_at=now() WHERE order_id=@id AND event_sent_at IS NULL");
+        cmd.Parameters.AddWithValue("id", id);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<List<PurchasedLicense>> GetKeysAsync(Guid orderId, string userId, CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("""
+            SELECT k.item_id,k.product_id,k.encrypted_key FROM vault_keys k
+            JOIN vault_fulfillments f ON f.order_id=k.order_id
+            WHERE f.order_id=@id AND f.user_id=@user AND f.delivered
+            ORDER BY k.item_id
+            """);
+        cmd.Parameters.AddWithValue("id", orderId);
+        cmd.Parameters.AddWithValue("user", userId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var keys = new List<PurchasedLicense>();
+        var enc = HMACSHA256.HashData(masterKey, "vault-encryption-v1"u8);
+        try
+        {
+            using var aes = new AesGcm(enc, 16);
+            while (await reader.ReadAsync(ct))
+            {
+                var blob = reader.GetFieldValue<byte[]>(2);
+                if (blob.Length < 29) throw new CryptographicException("Invalid encrypted key");
+                var plain = new byte[blob.Length - 28];
+                try
+                {
+                    aes.Decrypt(blob.AsSpan(0,12), blob.AsSpan(28), blob.AsSpan(12,16), plain);
+                    keys.Add(new(reader.GetGuid(0), reader.GetGuid(1), Encoding.UTF8.GetString(plain)));
+                }
+                finally { CryptographicOperations.ZeroMemory(plain); }
+            }
+        }
+        finally { CryptographicOperations.ZeroMemory(enc); }
+        return keys;
     }
 }

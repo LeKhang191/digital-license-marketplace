@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { OrderKeys } from "../components/OrderKeys";
+import { keycloak } from "../auth/keycloak";
 import { listOrders } from "../api/orders";
 import type { Order } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
@@ -6,13 +8,23 @@ import { StatusBadge } from "../components/StatusBadge";
 import { vnd } from "../components/format";
 
 export function OrdersPage() {
+  const { authenticated } = useAuth();
+  return <OrderList key={authenticated ? keycloak.tokenParsed?.sub ?? "unknown" : "guest"} />;
+}
+
+function OrderList() {
   const { ready, authenticated, login } = useAuth();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const subject = keycloak.tokenParsed?.sub;
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
-    if (!authenticated) return;
-    listOrders().then(setOrders).catch((e: Error) => setError(e.message));
-  }, [authenticated]);
+    let active = true;
+    setOrders(null); setError(null);
+    if (authenticated && subject) listOrders().then(v => { if (active) setOrders(v); })
+      .catch((e: Error) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [authenticated, subject, revision]);
 
   if (!ready) return <div className="container"><p className="muted">Đang tải...</p></div>;
   if (!authenticated)
@@ -26,13 +38,14 @@ export function OrdersPage() {
   return (
     <div className="container">
       <h1>Đơn hàng của tôi</h1>
+      <button className="btn" onClick={() => setRevision(v => v + 1)}>Làm mới đơn hàng</button>
       {error && <div className="alert">{error}</div>}
       {!orders && !error && <p className="muted">Đang tải...</p>}
       {orders && orders.length === 0 && <p className="muted">Bạn chưa có đơn hàng nào.</p>}
 
       <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
         {orders?.map((o) => (
-          <div className="card" key={o.id}>
+          <div className="card" key={`${subject}:${o.id}`}>
             <div className="row">
               <strong>Đơn {o.id.slice(0, 8)}</strong>
               <StatusBadge status={o.status} />
@@ -45,7 +58,7 @@ export function OrdersPage() {
             {o.status === "PENDING" && (
               <p className="muted">Đang chờ đối soát. Nếu đã thanh toán, không chuyển tiền lần nữa. Liên hệ hỗ trợ nếu cần kiểm tra giao dịch.</p>
             )}
-            {/* TODO: hiển thị Key khi License Vault sẵn sàng (đơn COMPLETED) */}
+            {o.status === "COMPLETED" && <OrderKeys key={`${subject}:${o.id}`} orderId={o.id} />}
           </div>
         ))}
       </div>

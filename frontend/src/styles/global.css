@@ -203,3 +203,180 @@ input, select {
     text-decoration: none;
   }
 }
+
+
+
+/* License Vault Dashboard */
+
+.license-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.license-summary h2 {
+  font-size: 16px;
+}
+
+.license-available {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.license-assigned {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.license-disabled {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.license-duplicate {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.license-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.license-form p {
+  margin: 0;
+}
+
+.license-upload {
+  padding: 24px;
+  border: 2px dashed var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg);
+}
+
+.license-upload input {
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.license-upload p {
+  margin: 12px 0;
+}
+
+.license-import-result {
+  margin: 20px 0;
+}
+
+.license-import-result strong {
+  font-size: 26px;
+}
+
+.license-status {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.license-status.available {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.license-status.assigned {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.license-status.disabled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+#license-details {
+  scroll-margin-top: 24px;
+}
+
+.product-back {
+  margin-bottom: 24px;
+}
+
+.product-back a {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .license-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .license-summary h2 {
+    font-size: 14px;
+  }
+
+  .license-upload {
+    padding: 16px;
+  }
+
+  .navbar .container {
+    flex-wrap: wrap;
+  }
+}
+
+/* Refresh icon button */
+
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: var(--color-bg);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.refresh-icon {
+  display: block;
+}
+
+.refresh-icon.spinning {
+  animation: refresh-spin 0.8s linear infinite;
+}
+
+@keyframes refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-icon.spinning {
+    animation: none;
+  }
+}

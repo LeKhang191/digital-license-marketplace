@@ -1,6 +1,18 @@
 {
   "Routes": [
     {
+      "DownstreamPathTemplate": "/api/licenses/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "license-vault",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/licenses/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PATCH"]
+    },
+    {
       "DownstreamPathTemplate": "/api/products/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],

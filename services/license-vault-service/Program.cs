@@ -1,23 +1,70 @@
+
+using LicenseVault.Api.Application.Interfaces;
+using LicenseVault.Api.Application.Services;
+using LicenseVault.Api.Infrastructure.Catalog;
+using LicenseVault.Api.Infrastructure.Persistence;
+using LicenseVault.Api.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+var connectionString = builder.Configuration
+    .GetConnectionString("LicenseDb")
+    ?? throw new InvalidOperationException(
+        "LicenseDb connection string is missing");
 
+var catalogUrl = builder.Configuration[
+    "Services:CatalogUrl"]
+    ?? throw new InvalidOperationException(
+        "Services:CatalogUrl is missing");
+
+// Database
+builder.Services.AddDbContext<LicenseDbContext>(
+    options => options.UseNpgsql(connectionString));
+
+// Catalog integration
+builder.Services.AddHttpClient<
+    ICatalogClient,
+    CatalogClient>(client =>
+{
+    client.BaseAddress = new Uri(
+        catalogUrl.TrimEnd('/') + "/");
+
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// Encryption
+builder.Services.Configure<LicenseEncryptionOptions>(
+    builder.Configuration.GetSection("LicenseEncryption"));
+
+builder.Services.AddSingleton<
+    ILicenseEncryption,
+    LicenseEncryption>();
+
+// Business services
+builder.Services.AddScoped<
+    ILicenseService,
+    LicenseService>();
+
+// Security
+builder.Services.AddKeycloakAuth(
+    builder.Configuration);
+
+// HTTP services
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+// Validate encryption configuration at startup
+_ = app.Services.GetRequiredService<ILicenseEncryption>();
 
-app.UseHttpsRedirection();
+// Database schema is managed by EF Core migrations.
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();

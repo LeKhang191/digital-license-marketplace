@@ -49,3 +49,38 @@ export interface ProductUpsertRequest {
   price: number;
   isActive: boolean;
 }
+
+
+export type LicenseStatus =
+  | "AVAILABLE"
+  | "ASSIGNED"
+  | "DISABLED";
+
+export interface LicenseKey {
+  id: string;
+  productId: string;
+  status: LicenseStatus;
+  createdAtUtc: string;
+  assignedAtUtc: string | null;
+}
+
+export interface LicenseInventory {
+  productId: string;
+  total: number;
+  available: number;
+  assigned: number;
+  disabled: number;
+}
+
+export interface ImportLicensesRequest {
+  productId: string;
+  keys: string[];
+}
+
+export interface ImportLicensesResponse {
+  productId: string;
+  total: number;
+  imported: number;
+  duplicates: number;
+  invalid: number;
+}

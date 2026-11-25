@@ -9,6 +9,7 @@ services:
     environment:
       CATALOG_CONNECTION: "Host=postgres;Port=5432;Database=catalog_db;Username=app;Password=${DB_PASSWORD}"
       ORDER_CONNECTION: "Host=postgres;Port=5432;Database=order_db;Username=app;Password=${DB_PASSWORD}"
+      LICENSE_CONNECTION: "Host=postgres;Port=5432;Database=license_db;Username=app;Password=${DB_PASSWORD}"   
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +108,33 @@ services:
       - backend
     restart: unless-stopped
 
+
+  license-vault:
+    build:
+      context: .
+      dockerfile: services/license-vault-service/Dockerfile
+    environment:
+      ConnectionStrings__LicenseDb: "Host=postgres;Port=5432;Database=license_db;Username=app;Password=${DB_PASSWORD}"
+      Services__CatalogUrl: "http://catalog:8080"
+
+      Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
+      Keycloak__Issuer: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}/realms/marketplace"
+
+      LicenseEncryption__EncryptionKey: "${LICENSE_ENCRYPTION_KEY:?LICENSE_ENCRYPTION_KEY required}"
+      LicenseEncryption__FingerprintKey: "${LICENSE_FINGERPRINT_KEY:?LICENSE_FINGERPRINT_KEY required}"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    networks:
+      - backend
+    restart: unless-stopped
+
+
   gateway:
     build:
       context: .
@@ -118,6 +146,7 @@ services:
     depends_on:
       - catalog
       - order
+      - license-vault
     networks:
       - backend
     restart: unless-stopped

@@ -6,6 +6,16 @@ cd "$(dirname "$0")/.."
 
 CATALOG_MIGRATION="20261123061604_InitialCreate"
 ORDER_MIGRATION="20261123061608_InitialCreate"
+LICENSE_MIGRATION=$(basename "$(find \
+    services/license-vault-service/Infrastructure/Persistence/Migrations \
+    -maxdepth 1 \
+    -name '*_InitialCreate.cs' \
+    -print -quit)" .cs)
+
+if [[ -z "$LICENSE_MIGRATION" ]]; then
+    echo "ERROR: License initial migration is missing."
+    exit 1
+fi
 
 query_db() {
     local database="$1"
@@ -76,10 +86,20 @@ docker compose config --quiet
 
 echo "[1/4] Starting PostgreSQL..."
 docker compose up -d --wait postgres
+if [[ "$(query_db postgres \
+    "SELECT count(*) FROM pg_database WHERE datname = 'license_db';")" == "0" ]]; then
 
+    echo "[Database] Creating license_db..."
+
+    docker compose exec -T postgres \
+        psql -X -U app -d postgres \
+        -v ON_ERROR_STOP=1 \
+        -c 'CREATE DATABASE license_db;'
+fi
 echo "[2/4] Checking databases..."
 check_database catalog_db "$CATALOG_MIGRATION"
 check_database order_db "$ORDER_MIGRATION"
+check_database license_db "$LICENSE_MIGRATION"
 
 echo "[3/4] Building migration image..."
 docker compose --profile migration build migrator
@@ -88,6 +108,7 @@ echo "[4/4] Applying migrations..."
 
 docker compose --profile migration run --rm migrator catalog
 docker compose --profile migration run --rm migrator order
+docker compose --profile migration run --rm migrator license
 
 echo "================================="
 echo " Database migrations completed."

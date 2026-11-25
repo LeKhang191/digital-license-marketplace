@@ -45,6 +45,25 @@ else
     echo ".env already exists. Keeping existing configuration."
 fi
 
+
+# Initialize License Vault secrets
+umask 077
+
+if ! grep -q '^LICENSE_ENCRYPTION_KEY=' .env; then
+    printf '\nLICENSE_ENCRYPTION_KEY=%s\n' \
+        "$(openssl rand -base64 32)" >> .env
+fi
+
+if ! grep -q '^LICENSE_FINGERPRINT_KEY=' .env; then
+    printf '\nLICENSE_FINGERPRINT_KEY=%s\n' \
+        "$(openssl rand -base64 32)" >> .env
+fi
+
+chmod 600 .env
+
+echo "License Vault secrets are configured."
+
+
 # Kiểm tra Docker Compose
 echo "Validating Docker Compose..."
 docker compose config --quiet
@@ -59,7 +78,7 @@ docker compose up -d rabbitmq keycloak
 # Dừng backend nếu đang chạy
 echo "[2/4] Stopping application services..."
 
-docker compose stop gateway order catalog
+docker compose stop gateway order catalog license-vault
 
 # Thực hiện database migration
 echo "[3/4] Applying database migrations..."
@@ -69,8 +88,7 @@ bash scripts/migrate.sh
 # Build và khởi động backend
 echo "[4/4] Building and starting backend..."
 
-docker compose up -d --build catalog order gateway
-
+docker compose up -d --build catalog order license-vault gateway
 
 # Hiển thị trạng thái
 echo ""

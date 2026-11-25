@@ -5,11 +5,10 @@ set -Eeuo pipefail
 
 cd /src
 
-: "${CATALOG_CONNECTION:?Catalog connection is required}"
-: "${ORDER_CONNECTION:?Order connection is required}"
-
 case "${1:-}" in
     catalog)
+        : "${CATALOG_CONNECTION:?Catalog connection is required}"
+
         echo "[Migration] Updating Catalog database..."
 
         EF_MIGRATIONS_CONNECTION="$CATALOG_CONNECTION" \
@@ -22,6 +21,8 @@ case "${1:-}" in
         ;;
 
     order)
+        : "${ORDER_CONNECTION:?Order connection is required}"
+
         echo "[Migration] Updating Order database..."
 
         EF_MIGRATIONS_CONNECTION="$ORDER_CONNECTION" \
@@ -33,8 +34,22 @@ case "${1:-}" in
             --no-build
         ;;
 
+    license)
+        : "${LICENSE_CONNECTION:?License connection is required}"
+
+        echo "[Migration] Updating License database..."
+
+        EF_MIGRATIONS_CONNECTION="$LICENSE_CONNECTION" \
+        dotnet ef database update \
+            --project services/license-vault-service/LicenseVault.Api.csproj \
+            --startup-project services/license-vault-service/LicenseVault.Api.csproj \
+            --context LicenseDbContext \
+            --configuration Release \
+            --no-build
+        ;;
+
     *)
-        echo "Usage: migrate.sh {catalog|order}" >&2
+        echo "Usage: migrate.sh {catalog|order|license}" >&2
         exit 1
         ;;
 esac

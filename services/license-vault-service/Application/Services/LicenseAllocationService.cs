@@ -11,7 +11,7 @@ namespace LicenseVault.Api.Application.Services;
 public sealed class LicenseAllocationService(
     LicenseDbContext db,
     ILogger<LicenseAllocationService> log
-) : ILicenseAllocationService
+) 
 {
     private static readonly JsonSerializerOptions Json =
         new(JsonSerializerDefaults.Web);

@@ -62,16 +62,10 @@ builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
 
 // License allocation
-builder.Services.AddScoped<
-    ILicenseAllocationService,
-    LicenseAllocationService>();
+builder.Services.AddScoped<LicenseAllocationService>();
 
 // Enable the consumer explicitly when ready.
-if (builder.Configuration.GetValue<bool>(
-    "RabbitMq:ConsumerEnabled"))
-{
-    builder.Services.AddHostedService<OrderPaidConsumer>();
-}
+builder.Services.AddHostedService<OrderPaidConsumer>();
 
 // Allocation result publisher
 builder.Services.AddSingleton<

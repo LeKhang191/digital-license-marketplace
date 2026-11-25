@@ -44,12 +44,7 @@ builder.Services.AddHealthChecks();
 // Order fulfillment
 builder.Services.AddScoped<OrderFulfillmentService>();
 
-if (builder.Configuration.GetValue<bool>(
-    "RabbitMq:ResultConsumerEnabled"))
-{
-    builder.Services.AddHostedService<
-        OrderLicenseEventsConsumer>();
-}
+builder.Services.AddHostedService<OrderLicenseEventsConsumer>();
 
 var app = builder.Build();
 

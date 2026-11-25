@@ -94,7 +94,6 @@ services:
       VnPay__HashSecret: ${VNPAY_HASH_SECRET:-}
       VnPay__ReturnUrl: "${VNPAY_RETURN_URL:-http://localhost:5173/payment/result}"
       RabbitMq__Host: rabbitmq
-      RabbitMq__ResultConsumerEnabled: "${ORDER_RESULT_CONSUMER_ENABLED:-false}"
       RabbitMq__User: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
@@ -128,7 +127,6 @@ services:
       LicenseEncryption__FingerprintKey: "${LICENSE_FINGERPRINT_KEY:?LICENSE_FINGERPRINT_KEY required}"
 
       RabbitMq__Host: rabbitmq
-      RabbitMq__ConsumerEnabled: "${LICENSE_CONSUMER_ENABLED:-false}"
       RabbitMq__Port: 5672
       RabbitMq__User: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}

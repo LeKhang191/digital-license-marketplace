@@ -1,3 +1,4 @@
+using LicenseVault.Api.Application.Services;
 using System.Text.Json;
 using Contracts.Events;
 using LicenseVault.Api.Application.Interfaces;
@@ -82,7 +83,7 @@ public sealed class OrderPaidConsumer(
                         var allocation =
                             scope.ServiceProvider
                                 .GetRequiredService<
-                                    ILicenseAllocationService>();
+                                    LicenseAllocationService>();
 
                         await allocation.ProcessAsync(
                             message,

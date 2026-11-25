@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { getProduct } from "../api/products";
 import { createOrder } from "../api/orders";
 import type { Product } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { ProductArtwork } from "../components/ProductCard";
 import { vnd } from "../components/format";
 
 export function ProductPage() {
@@ -42,11 +43,15 @@ export function ProductPage() {
 
   return (
     <div className="container">
-      <div className="card">
+      <Link className="back-link" to="/">← Cửa hàng</Link>
+      <div className="detail-layout">
+        <ProductArtwork product={product}/>
+        <div className="card detail-card">
         <div className="muted">{product.category}</div>
         <h1>{product.name}</h1>
         <p>{product.description || "Chưa có mô tả."}</p>
         <p className="price" style={{ fontSize: 24 }}>{vnd(product.price)}</p>
+        <p className="muted">Tổng tiền: {vnd(product.price * quantity)}</p>
 
         <div className="row">
           <label>
@@ -61,6 +66,7 @@ export function ProductPage() {
         </div>
 
         {error && <div className="alert" style={{ marginTop: 16 }}>{error}</div>}
+      </div>
       </div>
     </div>
   );

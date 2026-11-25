@@ -488,3 +488,22 @@ $RECYCLE.BIN/
 # Local database snapshots and binary exports
 backups/
 *.dump
+
+# .NET build artifacts
+**/bin/
+**/obj/
+**/bin\\Debug/
+**/bin\\Release/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Database backups
+backups/
+*.dump
+*.bak
+
+# Temporary patches
+*.patch

@@ -35,6 +35,7 @@ builder.Services.AddSingleton<VnPayService>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddScoped<IOrderManager, OrderManager>();
 builder.Services.AddScoped<VnPayIpnHandler>();
+builder.Services.AddHostedService<PaidOrderDispatchWorker>();
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();

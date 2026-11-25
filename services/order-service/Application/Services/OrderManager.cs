@@ -12,6 +12,7 @@ public static class OrderErrors
     public const string ProductNotFound = "Product not found";
     public const string OrderNotFound = "Order not found";
     public const string NotPayable = "Order is not payable";
+    public const string PaymentReconciliationRequired = "Payment link cannot be reissued until the original transaction is reconciled. Check your order or contact support.";
     public const string PaymentNotConfigured = "PAYMENT_NOT_CONFIGURED";
 }
 
@@ -93,11 +94,9 @@ public sealed class OrderManager(
         if (order.Status != OrderStatus.Pending)
             return (null, OrderErrors.NotPayable);
 
-        order.PaymentRef = NewPaymentRef(order.Id);
-        await db.SaveChangesAsync(ct);
-
-        var url = vnpay.CreatePaymentUrl(order, clientIp);
-        return (OrderResponse.From(order) with { PaymentUrl = url }, null);
+        // Never overwrite a reference that may still receive a successful IPN.
+        // Reissuing payment requires a separate, reconciled payment-attempt model.
+        return (null, OrderErrors.PaymentReconciliationRequired);
     }
 
     public async Task<IReadOnlyList<OrderResponse>> ListAsync(

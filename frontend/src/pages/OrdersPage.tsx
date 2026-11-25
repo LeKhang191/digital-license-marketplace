@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listOrders, payOrder } from "../api/orders";
+import { listOrders } from "../api/orders";
 import type { Order } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import { StatusBadge } from "../components/StatusBadge";
@@ -9,27 +9,10 @@ export function OrdersPage() {
   const { ready, authenticated, login } = useAuth();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [payingId, setPayingId] = useState<string | null>(null);
-
   useEffect(() => {
     if (!authenticated) return;
     listOrders().then(setOrders).catch((e: Error) => setError(e.message));
   }, [authenticated]);
-
-  async function repay(id: string) {
-    if (payingId) return;
-    setPayingId(id);
-    setError(null);
-    try {
-      const order = await payOrder(id);
-      if (!order.paymentUrl) throw new Error("Không nhận được liên kết thanh toán");
-      window.location.href = order.paymentUrl;
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setPayingId(null);
-    }
-  }
 
   if (!ready) return <div className="container"><p className="muted">Đang tải...</p></div>;
   if (!authenticated)
@@ -60,9 +43,7 @@ export function OrdersPage() {
               {o.items.length} sản phẩm · {new Date(o.createdAtUtc).toLocaleString("vi-VN")}
             </div>
             {o.status === "PENDING" && (
-              <button className="btn" style={{ marginTop: 12 }} disabled={payingId !== null} onClick={() => repay(o.id)}>
-                {payingId === o.id ? "Đang tạo liên kết..." : "Thanh toán lại"}
-              </button>
+              <p className="muted">Đang chờ đối soát. Nếu đã thanh toán, không chuyển tiền lần nữa. Liên hệ hỗ trợ nếu cần kiểm tra giao dịch.</p>
             )}
             {/* TODO: hiển thị Key khi License Vault sẵn sàng (đơn COMPLETED) */}
           </div>

@@ -68,11 +68,11 @@ export function PaymentResultPage() {
         {order && (
           <>
             <p><StatusBadge status={order.status} /></p>
-            {order.status === "PENDING" && <p className="muted">Đang chờ VNPay xác nhận. Vui lòng không đóng trang.</p>}
+            {order.status === "PENDING" && <p className="muted">Đang chờ VNPay xác nhận. Không thanh toán lại khi chưa đối soát.</p>}
             {order.status === "PAID" && !gaveUp && <p className="muted">Thanh toán thành công. Hệ thống đang cấp Key cho bạn...</p>}
-            {gaveUp && <p className="muted">Hệ thống vẫn đang xử lý đơn hàng. Bạn có thể đóng trang này, Key sẽ được gửi qua email khi sẵn sàng. Trạng thái luôn cập nhật ở trang đơn hàng.</p>}
-            {order.status === "COMPLETED" && <p>Key đã được gửi qua email của bạn.</p>}
-            {order.status === "REFUNDING" && <p>Sản phẩm tạm hết Key. Chúng tôi đang hoàn tiền cho bạn.</p>}
+            {gaveUp && <p className="muted">Hệ thống chưa có kết quả cuối cùng. Kiểm tra trang đơn hàng hoặc liên hệ hỗ trợ nếu đã chuyển tiền. Không thanh toán lại.</p>}
+            {order.status === "COMPLETED" && <p>Đơn hàng đã hoàn tất. Kiểm tra thông tin giao hàng hoặc liên hệ hỗ trợ.</p>}
+            {order.status === "REFUNDING" && <p>Đơn hàng cần được xử lý hoàn tiền. Chưa xác nhận tiền đã được hoàn.</p>}
             {order.status === "REFUNDED" && <p>Đã hoàn tiền. Rất tiếc về sự bất tiện này.</p>}
             {order.status === "CANCELED" && <p>Giao dịch không thành công nên đơn hàng đã bị hủy. Bạn có thể đặt đơn mới từ trang sản phẩm.</p>}
           </>

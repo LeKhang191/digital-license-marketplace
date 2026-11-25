@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import {Link, useParams } from "react-router-dom";
 import { getProduct } from "../api/products";
 import { createOrder } from "../api/orders";
 import type { Product } from "../api/types";
@@ -39,9 +39,16 @@ export function ProductPage() {
 
   if (error && !product) return <div className="container"><div className="alert">{error}</div></div>;
   if (!product) return <div className="container"><p className="muted">Đang tải...</p></div>;
+    
+  const total = product.price * quantity;
 
   return (
     <div className="container">
+      <div className="product-back">
+        <Link to="/" className="btn btn-secondary">
+          ← Quay về cửa hàng
+        </Link>
+      </div>
       <div className="card">
         <div className="muted">{product.category}</div>
         <h1>{product.name}</h1>
@@ -52,7 +59,11 @@ export function ProductPage() {
           <label>
             Số lượng{" "}
             <input type="number" min={1} max={10} value={quantity}
-              onChange={(e) => setQuantity(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
+              onChange={(e) =>
+                setQuantity(
+                  Math.min(10, Math.max(1, Math.trunc(Number(e.target.value) || 1)))
+                )
+              }
               style={{ width: 72 }} />
           </label>
           <button className="btn" onClick={buy} disabled={busy}>
@@ -61,6 +72,12 @@ export function ProductPage() {
         </div>
 
         {error && <div className="alert" style={{ marginTop: 16 }}>{error}</div>}
+        <div style={{ marginTop: 20 }}>
+          <strong>Tổng thanh toán: </strong>
+          <span className="price" style={{ fontSize: 24 }}>
+            {vnd(total)}
+          </span>
+        </div>
       </div>
     </div>
   );

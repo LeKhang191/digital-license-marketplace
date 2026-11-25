@@ -1,3 +1,4 @@
+
 using Catalog.Api.Application.DTOs;
 
 namespace Catalog.Api.Application.Interfaces;
@@ -9,7 +10,8 @@ public interface IProductService
         int pageSize,
         string? search,
         string? category,
-        CancellationToken ct
+        CancellationToken ct,
+        bool includeInactive = false
     );
 
     Task<ProductResponse?> GetAsync(

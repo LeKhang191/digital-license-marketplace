@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
 import {
-  listProducts,
+  listManagedProducts,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -38,17 +38,14 @@ function generateSlug(value: string) {
 }
 
 export function AdminPage() {
-  const { ready, isAdmin } = useAuth();
+  const { ready, isCatalogManager } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState<ProductUpsertRequest>({
     ...EMPTY_FORM,
   });
 
-  const [editingId, setEditingId] = useState<string | null>(
-    null,
-  );
-
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,16 +57,13 @@ export function AdminPage() {
     setLoading(true);
 
     try {
-      const first = await listProducts({ page: 1 });
+      const first = await listManagedProducts({ page: 1 });
 
       const items = [...first.items];
-
-      const lastPage = Math.ceil(
-        first.total / first.pageSize,
-      );
+      const lastPage = Math.ceil(first.total / first.pageSize);
 
       for (let page = 2; page <= lastPage; page++) {
-        const result = await listProducts({ page });
+        const result = await listManagedProducts({ page });
         items.push(...result.items);
       }
 
@@ -86,10 +80,10 @@ export function AdminPage() {
   }
 
   useEffect(() => {
-    if (ready && isAdmin) {
+    if (ready && isCatalogManager) {
       void loadProducts();
     }
-  }, [ready, isAdmin]);
+  }, [ready, isCatalogManager]);
 
   function openCreateForm() {
     setForm({ ...EMPTY_FORM });
@@ -161,6 +155,46 @@ export function AdminPage() {
     }
   }
 
+  async function toggleProductVisibility(product: Product) {
+    setError("");
+    setSuccess("");
+    setSaving(true);
+
+    try {
+      await updateProduct(product.id, {
+        name: product.name,
+        slug: product.slug,
+        description: product.description,
+        category: product.category,
+        price: product.price,
+        isActive: !product.isActive,
+      });
+
+      setSuccess(
+        product.isActive
+          ? "Đã ẩn sản phẩm khỏi cửa hàng."
+          : "Đã mở bán lại sản phẩm.",
+      );
+
+      if (editingId === product.id) {
+        setForm((old) => ({
+          ...old,
+          isActive: !product.isActive,
+        }));
+      }
+
+      await loadProducts();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Không thể thay đổi trạng thái sản phẩm.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete(product: Product) {
     const confirmed = window.confirm(
       `Bạn có chắc muốn xóa "${product.name}"?`,
@@ -200,7 +234,7 @@ export function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isCatalogManager) {
     return (
       <div className="container">
         <div className="alert">
@@ -210,25 +244,27 @@ export function AdminPage() {
     );
   }
 
+  const activeCount = products.filter((p) => p.isActive).length;
+  const inactiveCount = products.length - activeCount;
+
   return (
     <div className="container">
-      <h1>Quản trị</h1>
+      <h1>Quản lý danh mục sản phẩm</h1>
 
       <div className="grid admin-summary">
         <div className="card">
-          <h2>Sản phẩm</h2>
+          <h2>Tổng sản phẩm</h2>
           <strong>{products.length}</strong>
-          <p className="muted">Sản phẩm đang hoạt động</p>
         </div>
 
         <div className="card">
-          <h2>Kho Key</h2>
-          <p className="muted">Chưa triển khai</p>
+          <h2>Đang mở bán</h2>
+          <strong>{activeCount}</strong>
         </div>
 
         <div className="card">
-          <h2>Hoàn tiền</h2>
-          <p className="muted">Chưa triển khai</p>
+          <h2>Đã ẩn</h2>
+          <strong>{inactiveCount}</strong>
         </div>
       </div>
 
@@ -399,7 +435,7 @@ export function AdminPage() {
           <p className="muted">Đang tải sản phẩm...</p>
         ) : products.length === 0 ? (
           <p className="muted">
-            Chưa có sản phẩm đang hoạt động.
+            Chưa có sản phẩm nào.
             Hãy tạo sản phẩm đầu tiên.
           </p>
         ) : (
@@ -429,9 +465,18 @@ export function AdminPage() {
                   <td>{vnd(product.price)}</td>
 
                   <td>
-                    {product.isActive
-                      ? "Hoạt động"
-                      : "Đã ẩn"}
+                    <span
+                      style={{
+                        color: product.isActive
+                          ? "#16a34a"
+                          : "#6b7280",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {product.isActive
+                        ? "Đang mở bán"
+                        : "Đã ẩn"}
+                    </span>
                   </td>
 
                   <td>
@@ -442,6 +487,16 @@ export function AdminPage() {
                         onClick={() => openEditForm(product)}
                       >
                         Sửa
+                      </button>
+
+                      <button
+                        className="btn btn-secondary"
+                        disabled={saving}
+                        onClick={() =>
+                          void toggleProductVisibility(product)
+                        }
+                      >
+                        {product.isActive ? "Ẩn" : "Mở bán"}
                       </button>
 
                       <button

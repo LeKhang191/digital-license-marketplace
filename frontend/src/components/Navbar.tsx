@@ -1,23 +1,81 @@
+
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 
 export function Navbar() {
-  const { ready, authenticated, username, isAdmin, login, logout } = useAuth();
+  const {
+    ready,
+    authenticated,
+    username,
+    isCustomer,
+    isCatalogManager,
+    isLicenseCoordinator,
+    isTransactionAuditor,
+    login,
+    logout,
+  } = useAuth();
+
+  const roleLabels = [
+    isCatalogManager ? "Catalog Manager" : null,
+    isLicenseCoordinator
+      ? "License Coordinator"
+      : null,
+    isTransactionAuditor
+      ? "Transaction Auditor"
+      : null,
+    isCustomer ? "Customer" : null,
+  ].filter(Boolean);
 
   return (
     <nav className="navbar">
       <div className="container">
-        <Link to="/" className="brand">Digital License Marketplace</Link>
-        {authenticated && <Link to="/orders">Đơn hàng của tôi</Link>}
-        {isAdmin && <Link to="/admin">Quản trị</Link>}
+        <Link to="/" className="brand">
+          Digital License Marketplace
+        </Link>
+
+        {isCustomer && (
+          <Link to="/orders">
+            Đơn hàng của tôi
+          </Link>
+        )}
+
+        {isCatalogManager && (
+          <Link to="/admin">
+            Quản lý sản phẩm
+          </Link>
+        )}
+
         <span className="spacer" />
+
         {!ready ? null : authenticated ? (
           <>
-            <span className="muted">{username}</span>
-            <button className="btn btn-secondary" onClick={logout}>Đăng xuất</button>
+            <div>
+              <span className="muted">
+                {username}
+              </span>
+
+              <div
+                className="muted"
+                style={{ fontSize: 12 }}
+              >
+                {roleLabels.join(" / ")}
+              </div>
+            </div>
+
+            <button
+              className="btn btn-secondary"
+              onClick={logout}
+            >
+              Đăng xuất
+            </button>
           </>
         ) : (
-          <button className="btn" onClick={login}>Đăng nhập</button>
+          <button
+            className="btn"
+            onClick={login}
+          >
+            Đăng nhập
+          </button>
         )}
       </div>
     </nav>

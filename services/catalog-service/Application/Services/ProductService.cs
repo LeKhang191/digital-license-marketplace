@@ -1,3 +1,4 @@
+
 using Catalog.Api.Application.DTOs;
 using Catalog.Api.Application.Interfaces;
 using Catalog.Api.Domain.Entities;
@@ -16,11 +17,12 @@ public sealed class ProductService(
         int pageSize,
         string? search,
         string? category,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool includeInactive = false)
     {
         var query = db.Products
             .AsNoTracking()
-            .Where(p => p.IsActive);
+            .Where(p => includeInactive || p.IsActive);
 
         if (!string.IsNullOrWhiteSpace(search))
         {

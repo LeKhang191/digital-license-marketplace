@@ -1,3 +1,4 @@
+
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -20,10 +21,10 @@ public static class KeycloakAuthExtensions
                 "Keycloak:Issuer is missing");
 
         services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddAuthentication(
+                JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                // Lấy khóa công khai qua mạng nội bộ Docker (keycloak:8080)
                 options.MetadataAddress = metadata;
                 options.RequireHttpsMetadata = false;
                 options.MapInboundClaims = false;
@@ -31,7 +32,6 @@ public static class KeycloakAuthExtensions
                 options.TokenValidationParameters =
                     new TokenValidationParameters
                     {
-                        // Issuer là địa chỉ mà client dùng để đăng nhập
                         ValidIssuer = issuer,
                         ValidateAudience = false,
                         NameClaimType = "preferred_username",
@@ -50,32 +50,47 @@ public static class KeycloakAuthExtensions
 
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminOnly",
-                policy => policy.RequireRole("admin"));
+            options.AddPolicy(
+                "CatalogManagerOnly",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.RequireRole("catalog_manager");
+                });
         });
 
         return services;
     }
 
-    // Keycloak để role trong claim "realm_access": {"roles":[...]}
-    private static void AddRealmRoles(ClaimsPrincipal? principal)
+    private static void AddRealmRoles(
+        ClaimsPrincipal? principal)
     {
-        if (principal?.Identity is not ClaimsIdentity identity) return;
+        if (principal?.Identity
+            is not ClaimsIdentity identity)
+            return;
 
-        var raw = identity.FindFirst("realm_access")?.Value;
-        if (string.IsNullOrEmpty(raw)) return;
+        var raw = identity
+            .FindFirst("realm_access")?.Value;
+
+        if (string.IsNullOrEmpty(raw))
+            return;
 
         using var doc = JsonDocument.Parse(raw);
 
-        if (!doc.RootElement.TryGetProperty("roles", out var roles) ||
-            roles.ValueKind != JsonValueKind.Array) return;
+        if (!doc.RootElement.TryGetProperty(
+                "roles", out var roles)
+            || roles.ValueKind != JsonValueKind.Array)
+            return;
 
         foreach (var role in roles.EnumerateArray())
         {
             var value = role.GetString();
 
             if (!string.IsNullOrEmpty(value))
-                identity.AddClaim(new Claim(ClaimTypes.Role, value));
+            {
+                identity.AddClaim(
+                    new Claim(ClaimTypes.Role, value));
+            }
         }
     }
 }

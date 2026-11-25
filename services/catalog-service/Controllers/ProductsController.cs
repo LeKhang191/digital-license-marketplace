@@ -1,7 +1,7 @@
+
 using Microsoft.AspNetCore.Authorization;
 using Catalog.Api.Application.DTOs;
 using Catalog.Api.Application.Interfaces;
-using Catalog.Api.Infrastructure.Security;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Catalog.Api.Controllers;
@@ -12,7 +12,9 @@ public sealed class ProductsController(
     IProductService products
 ) : ControllerBase
 {
+    // Public: View active products
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> List(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -27,7 +29,31 @@ public sealed class ProductsController(
             page, pageSize, search, category, ct));
     }
 
+    // Catalog Manager: View all products
+    [HttpGet("manage")]
+    [Authorize(Policy = "CatalogManagerOnly")]
+    public async Task<IActionResult> ManageList(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] string? category = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1 || pageSize < 1 || pageSize > 100)
+            return BadRequest("Invalid pagination");
+
+        return Ok(await products.ListAsync(
+            page,
+            pageSize,
+            search,
+            category,
+            ct,
+            includeInactive: true));
+    }
+
+    // Public: View product details
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> Get(
         Guid id,
         CancellationToken ct)
@@ -39,13 +65,15 @@ public sealed class ProductsController(
             : Ok(product);
     }
 
+    // Catalog Manager: Create product
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "CatalogManagerOnly")]
     public async Task<IActionResult> Create(
         [FromBody] ProductUpsertRequest request,
         CancellationToken ct)
     {
-        var result = await products.CreateAsync(request, ct);
+        var result = await products.CreateAsync(
+            request, ct);
 
         if (result.conflict)
             return Conflict("Slug already exists");
@@ -57,8 +85,9 @@ public sealed class ProductsController(
         );
     }
 
+    // Catalog Manager: Update product
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "CatalogManagerOnly")]
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] ProductUpsertRequest request,
@@ -75,8 +104,9 @@ public sealed class ProductsController(
             : Ok(result.product);
     }
 
+    // Catalog Manager: Delete product
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "CatalogManagerOnly")]
     public async Task<IActionResult> Delete(
         Guid id,
         CancellationToken ct)

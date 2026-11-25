@@ -10,9 +10,48 @@ public sealed class LicenseDbContext(
 {
     public DbSet<LicenseKey> LicenseKeys => Set<LicenseKey>();
 
+    public DbSet<AllocationResult> AllocationResults =>
+        Set<AllocationResult>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        var allocation = modelBuilder.Entity<AllocationResult>();
+
+        allocation.ToTable("allocation_results");
+
+        allocation.HasKey(x => x.OrderId);
+
+        allocation.Property(x => x.CustomerId)
+            .HasMaxLength(255)
+            .IsRequired();
+
+        allocation.Property(x => x.Status)
+            .HasMaxLength(20)
+            .IsRequired();
+
+        allocation.Property(x => x.RequestFingerprint)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        allocation.Property(x => x.RoutingKey)
+            .HasMaxLength(100)
+            .IsRequired();
+
+        allocation.Property(x => x.Payload)
+            .HasColumnType("jsonb")
+            .IsRequired();
+
+        allocation.Property(x => x.LastError)
+            .HasMaxLength(500);
+
+        allocation.HasIndex(x => new
+        {
+            x.PublishedAtUtc,
+            x.NextRetryAtUtc
+        });
+
 
         var entity = modelBuilder.Entity<LicenseKey>();
 

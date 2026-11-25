@@ -59,6 +59,15 @@ if ! grep -q '^LICENSE_FINGERPRINT_KEY=' .env; then
         "$(openssl rand -base64 32)" >> .env
 fi
 
+# Initialize consumer settings
+if ! grep -q '^LICENSE_CONSUMER_ENABLED=' .env; then
+    printf '\nLICENSE_CONSUMER_ENABLED=false\n' >> .env
+fi
+
+if ! grep -q '^ORDER_RESULT_CONSUMER_ENABLED=' .env; then
+    printf '\nORDER_RESULT_CONSUMER_ENABLED=false\n' >> .env
+fi
+
 chmod 600 .env
 
 echo "License Vault secrets are configured."
@@ -74,6 +83,9 @@ echo "[1/4] Starting infrastructure..."
 
 docker compose up -d --wait postgres
 docker compose up -d rabbitmq keycloak
+
+# Configure RabbitMQ
+bash scripts/configure-rabbitmq.sh
 
 # Dừng backend nếu đang chạy
 echo "[2/4] Stopping application services..."

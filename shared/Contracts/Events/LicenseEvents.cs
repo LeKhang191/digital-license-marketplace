@@ -1,16 +1,19 @@
 namespace Contracts.Events;
 
-public sealed record AssignedKey(Guid ItemId, Guid ProductId, string Key);
+// Never include plaintext license keys in broker messages.
+public sealed record AssignedKey(
+    Guid ItemId,
+    Guid ProductId,
+    Guid LicenseId);
 
-// License Vault -> RabbitMQ: đã gán Key cho đơn (Notification gửi email)
-// Lưu ý: Key ở dạng đã giải mã, chỉ đi qua broker nội bộ, không expose ra ngoài.
+// License Vault -> Order Service
 public sealed record KeyAssignedEvent(
     Guid OrderId,
     string KeycloakUserId,
     string? CustomerEmail,
     IReadOnlyList<AssignedKey> Keys);
 
-// License Vault -> RabbitMQ: hết Key, kích hoạt hoàn tiền (Saga bù trừ)
+// License Vault -> Order Service
 public sealed record KeyOutOfStockEvent(
     Guid OrderId,
     Guid ProductId,

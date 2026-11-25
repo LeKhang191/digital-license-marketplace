@@ -35,12 +35,15 @@ services:
     restart: unless-stopped
 
   rabbitmq:
+    hostname: "${RABBITMQ_HOSTNAME:-rabbitmq}"
     image: rabbitmq:3-management
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
     ports:
       - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - backend
     restart: unless-stopped
@@ -91,6 +94,7 @@ services:
       VnPay__HashSecret: ${VNPAY_HASH_SECRET:-}
       VnPay__ReturnUrl: "${VNPAY_RETURN_URL:-http://localhost:5173/payment/result}"
       RabbitMq__Host: rabbitmq
+      RabbitMq__ResultConsumerEnabled: "${ORDER_RESULT_CONSUMER_ENABLED:-false}"
       RabbitMq__User: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
@@ -123,12 +127,20 @@ services:
       LicenseEncryption__EncryptionKey: "${LICENSE_ENCRYPTION_KEY:?LICENSE_ENCRYPTION_KEY required}"
       LicenseEncryption__FingerprintKey: "${LICENSE_FINGERPRINT_KEY:?LICENSE_FINGERPRINT_KEY required}"
 
+      RabbitMq__Host: rabbitmq
+      RabbitMq__ConsumerEnabled: "${LICENSE_CONSUMER_ENABLED:-false}"
+      RabbitMq__Port: 5672
+      RabbitMq__User: ${RABBITMQ_USER:?RABBITMQ_USER required}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+
     depends_on:
       postgres:
         condition: service_healthy
       catalog:
         condition: service_started
       keycloak:
+        condition: service_started
+      rabbitmq:
         condition: service_started
     networks:
       - backend
@@ -155,5 +167,6 @@ networks:
   backend:
 
 volumes:
+  rabbitmq_data:
   pg_data:
   kc_data:

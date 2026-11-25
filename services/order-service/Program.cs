@@ -33,12 +33,23 @@ builder.Services.Configure<RabbitMqOptions>(
 
 builder.Services.AddSingleton<VnPayService>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+builder.Services.AddHostedService<OutboxWorker>();
 builder.Services.AddScoped<IOrderManager, OrderManager>();
 builder.Services.AddScoped<VnPayIpnHandler>();
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
+
+// Order fulfillment
+builder.Services.AddScoped<OrderFulfillmentService>();
+
+if (builder.Configuration.GetValue<bool>(
+    "RabbitMq:ResultConsumerEnabled"))
+{
+    builder.Services.AddHostedService<
+        OrderLicenseEventsConsumer>();
+}
 
 var app = builder.Build();
 

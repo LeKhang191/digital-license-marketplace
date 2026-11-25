@@ -4,6 +4,7 @@ using LicenseVault.Api.Application.Services;
 using LicenseVault.Api.Infrastructure.Catalog;
 using LicenseVault.Api.Infrastructure.Persistence;
 using LicenseVault.Api.Infrastructure.Security;
+using LicenseVault.Api.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +47,12 @@ builder.Services.AddScoped<
     ILicenseService,
     LicenseService>();
 
+// RabbitMQ
+builder.Services.Configure<RabbitMqOptions>(
+    builder.Configuration.GetSection("RabbitMq"));
+
+builder.Services.AddHostedService<RabbitMqTopologyWorker>();
+
 // Security
 builder.Services.AddKeycloakAuth(
     builder.Configuration);
@@ -53,6 +60,25 @@ builder.Services.AddKeycloakAuth(
 // HTTP services
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
+
+// License allocation
+builder.Services.AddScoped<
+    ILicenseAllocationService,
+    LicenseAllocationService>();
+
+// Enable the consumer explicitly when ready.
+if (builder.Configuration.GetValue<bool>(
+    "RabbitMq:ConsumerEnabled"))
+{
+    builder.Services.AddHostedService<OrderPaidConsumer>();
+}
+
+// Allocation result publisher
+builder.Services.AddSingleton<
+    IEventPublisher,
+    RabbitMqPublisher>();
+
+builder.Services.AddHostedService<AllocationOutboxWorker>();
 
 var app = builder.Build();
 

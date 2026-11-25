@@ -507,3 +507,9 @@ backups/
 
 # Temporary patches
 *.patch
+
+# Cross-platform .NET build artifacts
+**/bin/
+**/obj/
+**/bin\\Debug/
+**/bin\\Release/

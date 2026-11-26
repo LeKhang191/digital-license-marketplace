@@ -13,6 +13,7 @@ public static class OrderErrors
     public const string ProductNotFound = "Product not found";
     public const string OrderNotFound = "Order not found";
     public const string NotPayable = "Order is not payable";
+    public const string PaymentExpired = "PAYMENT_EXPIRED";
     public const string InsufficientStock = "INSUFFICIENT_STOCK";
     public const string InventoryUnavailable = "INVENTORY_UNAVAILABLE";
     public const string PaymentNotConfigured = "PAYMENT_NOT_CONFIGURED";
@@ -106,6 +107,9 @@ public sealed class OrderManager(
         if (order.Status != OrderStatus.Pending)
             return (null, OrderErrors.NotPayable);
 
+        if (vnpay.IsPaymentExpired(order))
+            return (null, OrderErrors.PaymentExpired);
+
         if (order.Items.Count == 0)
             return (null, OrderErrors.NotPayable);
 
@@ -127,8 +131,11 @@ public sealed class OrderManager(
                 return (null, OrderErrors.InsufficientStock);
         }
 
-        order.PaymentRef = NewPaymentRef(order.Id);
-        await db.SaveChangesAsync(ct);
+        if (vnpay.IsPaymentExpired(order))
+            return (null, OrderErrors.PaymentExpired);
+
+        if (string.IsNullOrWhiteSpace(order.PaymentRef))
+            return (null, OrderErrors.NotPayable);
 
         var url = vnpay.CreatePaymentUrl(order, clientIp);
         return (OrderResponse.From(order) with { PaymentUrl = url }, null);
@@ -144,7 +151,20 @@ public sealed class OrderManager(
             .OrderByDescending(o => o.CreatedAtUtc)
             .ToListAsync(ct);
 
-        return orders.Select(OrderResponse.From).ToList();
+        var orderIds = orders.Select(o => o.Id).ToArray();
+
+        var results = await db.FulfillmentResults
+            .AsNoTracking()
+            .Where(x => orderIds.Contains(x.OrderId))
+            .ToDictionaryAsync(
+                x => x.OrderId,
+                x => x.Status,
+                ct);
+
+        return orders.Select(o => OrderResponse.From(
+            o,
+            results.GetValueOrDefault(o.Id)))
+            .ToList();
     }
 
     public async Task<OrderResponse?> GetAsync(
@@ -156,6 +176,15 @@ public sealed class OrderManager(
             .FirstOrDefaultAsync(
                 o => o.Id == id && o.KeycloakUserId == userId, ct);
 
-        return order is null ? null : OrderResponse.From(order);
+        if (order is null)
+            return null;
+
+        var fulfillmentStatus = await db.FulfillmentResults
+            .AsNoTracking()
+            .Where(x => x.OrderId == order.Id)
+            .Select(x => x.Status)
+            .FirstOrDefaultAsync(ct);
+
+        return OrderResponse.From(order, fulfillmentStatus);
     }
 }

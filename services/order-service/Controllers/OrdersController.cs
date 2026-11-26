@@ -90,6 +90,11 @@ public sealed class OrdersController(
         OrderErrors.PaymentNotConfigured => StatusCode(503,
             new { error = "VNPay is not configured" }),
         OrderErrors.OrderNotFound => NotFound(),
+        OrderErrors.PaymentExpired => Conflict(new
+        {
+            code = OrderErrors.PaymentExpired,
+            error = "Phiên thanh toán đã hết hạn. Vui lòng tạo đơn hàng mới."
+        }),
         OrderErrors.InsufficientStock => Conflict(new
         {
             code = OrderErrors.InsufficientStock,

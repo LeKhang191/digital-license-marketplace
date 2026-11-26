@@ -21,9 +21,13 @@ public sealed class VnPayService(IOptions<VnPayOptions> options)
     public static long ToVnpAmount(decimal total) =>
         (long)Math.Round(total, 0, MidpointRounding.AwayFromZero) * 100;
 
+    public bool IsPaymentExpired(Order order) =>
+        DateTime.UtcNow >=
+            order.CreatedAtUtc.AddMinutes(O.ExpireMinutes);
+
     public string CreatePaymentUrl(Order order, string clientIp)
     {
-        var now = DateTime.UtcNow.AddHours(7);
+        var now = order.CreatedAtUtc.AddHours(7);
 
         var p = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
@@ -47,6 +51,13 @@ public sealed class VnPayService(IOptions<VnPayOptions> options)
         var query = BuildQuery(p);
         return $"{O.PayUrl.TrimEnd('?')}?{query}&vnp_SecureHash={Hmac(query)}";
     }
+
+    public bool ValidateMerchant(string tmnCode) =>
+        !string.IsNullOrWhiteSpace(tmnCode) &&
+        string.Equals(
+            O.TmnCode,
+            tmnCode,
+            StringComparison.Ordinal);
 
     public bool ValidateSignature(IReadOnlyDictionary<string, string> query)
     {

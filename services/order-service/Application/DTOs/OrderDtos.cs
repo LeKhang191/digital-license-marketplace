@@ -23,14 +23,25 @@ public sealed record OrderResponse(
     decimal TotalAmount,
     DateTime CreatedAtUtc,
     IReadOnlyList<OrderItemResponse> Items,
-    string? PaymentUrl = null)
+    string? PaymentUrl = null,
+    string FulfillmentStatus = "NOT_STARTED")
 {
-    public static OrderResponse From(Order o) => new(
+    public static OrderResponse From(
+        Order o,
+        string? fulfillmentStatus = null) => new(
         o.Id,
         o.Status,
         o.TotalAmount,
         o.CreatedAtUtc,
         o.Items
             .Select(i => new OrderItemResponse(i.Id, i.ProductId, i.Price))
-            .ToList());
+            .ToList(),
+        FulfillmentStatus: fulfillmentStatus ?? (o.Status switch
+        {
+            OrderStatus.Paid => "PROCESSING",
+            OrderStatus.Completed => "ASSIGNED",
+            OrderStatus.Refunding => "UNKNOWN",
+            OrderStatus.Refunded => "UNKNOWN",
+            _ => "NOT_STARTED"
+        }));
 }

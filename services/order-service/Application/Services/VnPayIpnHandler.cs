@@ -1,4 +1,5 @@
 
+using System.Globalization;
 using System.Text.Json;
 using Contracts.Events;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +36,9 @@ public sealed class VnPayIpnHandler(
         if (!vnpay.ValidateSignature(query))
             return new("97", "Invalid signature");
 
+        if (!vnpay.ValidateMerchant(Get("vnp_TmnCode")))
+            return new("99", "Invalid merchant");
+
         var txnRef = Get("vnp_TxnRef");
 
         if (txnRef.Length < 32 ||
@@ -68,16 +72,55 @@ public sealed class VnPayIpnHandler(
             return new("04", "Invalid amount");
         }
 
-        if (order.Status != OrderStatus.Pending)
-        {
-            return new(
-                "02",
-                "Order already confirmed");
-        }
-
         var success =
             Get("vnp_ResponseCode") == "00" &&
             Get("vnp_TransactionStatus") == "00";
+
+        var recoverable =
+            success &&
+            order.Status == OrderStatus.Canceled &&
+            order.PaidAtUtc == null &&
+            string.IsNullOrEmpty(order.VnpTransactionNo);
+
+        if (order.Status != OrderStatus.Pending && !recoverable)
+        {
+            if (success &&
+                !string.IsNullOrEmpty(order.VnpTransactionNo) &&
+                order.VnpTransactionNo != Get("vnp_TransactionNo"))
+            {
+                log.LogWarning(
+                    "Conflicting payment transaction for {OrderId}; reconciliation required",
+                    orderId);
+
+                return new("99", "Payment reconciliation required");
+            }
+
+            return new("02", "Order already confirmed");
+        }
+
+        var txNo = Get("vnp_TransactionNo");
+        var payDate = Get("vnp_PayDate");
+
+        if (success)
+        {
+            if (txNo.Length == 0 ||
+                txNo.Length > 32 ||
+                txNo.Any(c => c < '0' || c > '9') ||
+                txNo.All(c => c == '0'))
+            {
+                return new("99", "Invalid transaction number");
+            }
+
+            if (!DateTime.TryParseExact(
+                    payDate,
+                    "yyyyMMddHHmmss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out _))
+            {
+                return new("99", "Invalid payment date");
+            }
+        }
 
         try
         {
@@ -110,16 +153,17 @@ public sealed class VnPayIpnHandler(
                 return new("00", "Confirm Success");
             }
 
-            var txNo = Get("vnp_TransactionNo");
-            var payDate = Get("vnp_PayDate");
-
             var paidAt = DateTime.UtcNow;
 
             var updated = await db.Orders
                 .Where(o =>
                     o.Id == orderId &&
                     o.PaymentRef == txnRef &&
-                    o.Status == OrderStatus.Pending)
+                    o.PaidAtUtc == null &&
+                    (o.VnpTransactionNo == null ||
+                     o.VnpTransactionNo == "") &&
+                    (o.Status == OrderStatus.Pending ||
+                     o.Status == OrderStatus.Canceled))
                 .ExecuteUpdateAsync(
                     setters => setters
                         .SetProperty(

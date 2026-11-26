@@ -134,6 +134,68 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_license_keys_Status", "\"Status\" IN ('AVAILABLE', 'ASSIGNED', 'DISABLED')");
                         });
                 });
+
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.LicenseReplacement", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("HandledBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("NewLicenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OldLicenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("TicketId");
+
+                    b.HasIndex("NewLicenseId")
+                        .IsUnique();
+
+                    b.HasIndex("OldLicenseId")
+                        .IsUnique();
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("license_replacements", (string)null);
+                });
+
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.LicenseReplacement", b =>
+                {
+                    b.HasOne("LicenseVault.Api.Domain.Entities.LicenseKey", null)
+                        .WithMany()
+                        .HasForeignKey("NewLicenseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LicenseVault.Api.Domain.Entities.LicenseKey", null)
+                        .WithMany()
+                        .HasForeignKey("OldLicenseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

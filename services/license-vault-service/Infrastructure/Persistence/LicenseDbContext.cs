@@ -13,9 +13,43 @@ public sealed class LicenseDbContext(
     public DbSet<AllocationResult> AllocationResults =>
         Set<AllocationResult>();
 
+    public DbSet<LicenseReplacement> LicenseReplacements =>
+        Set<LicenseReplacement>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        var replacement = modelBuilder.Entity<LicenseReplacement>();
+
+        replacement.ToTable("license_replacements");
+        replacement.HasKey(x => x.TicketId);
+
+        replacement.Property(x => x.CustomerId)
+            .HasMaxLength(255).IsRequired();
+
+        replacement.Property(x => x.HandledBy)
+            .HasMaxLength(255).IsRequired();
+
+        replacement.HasIndex(x => x.OldLicenseId)
+            .IsUnique();
+
+        replacement.HasIndex(x => x.NewLicenseId)
+            .IsUnique();
+
+        replacement.HasIndex(x => x.OrderId);
+
+        replacement.HasOne<LicenseKey>()
+            .WithMany()
+            .HasForeignKey(x => x.OldLicenseId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        replacement.HasOne<LicenseKey>()
+            .WithMany()
+            .HasForeignKey(x => x.NewLicenseId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+
 
         var allocation = modelBuilder.Entity<AllocationResult>();
 

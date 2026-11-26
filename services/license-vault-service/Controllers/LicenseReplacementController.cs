@@ -122,7 +122,7 @@ public sealed class LicenseReplacementController(
             request.Headers.Authorization = auth;
 
             using var response = await clients
-                .CreateClient("LicenseOrders")
+                .CreateClient("LicenseSupport")
                 .SendAsync(request, ct);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
@@ -149,7 +149,7 @@ public sealed class LicenseReplacementController(
         {
             return Error(
                 503,
-                "ORDER_SERVICE_UNAVAILABLE",
+                "SUPPORT_SERVICE_UNAVAILABLE",
                 "Cannot verify replacement eligibility.");
         }
 

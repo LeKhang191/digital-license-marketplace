@@ -1,4 +1,4 @@
-namespace OrderService.Application.DTOs;
+namespace SupportService.Application.DTOs;
 
 public sealed record CreateSupportTicketRequest(
     Guid OrderId,

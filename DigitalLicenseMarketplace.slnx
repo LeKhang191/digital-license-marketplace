@@ -21,4 +21,7 @@
   <Folder Name="/shared/">
     <Project Path="shared/Contracts/Contracts.csproj" />
   </Folder>
+  <Folder Name="/services/support-service/">
+    <Project Path="services/support-service/Support.Api.csproj" />
+  </Folder>
 </Solution>

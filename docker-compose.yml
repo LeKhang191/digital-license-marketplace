@@ -215,6 +215,37 @@ services:
     restart: unless-stopped
 
 
+  support:
+    build:
+      context: .
+      dockerfile: services/support-service/Dockerfile
+
+    environment:
+      InternalService__Key: "${PAYMENT_INTERNAL_KEY:?PAYMENT_INTERNAL_KEY required}"
+      ConnectionStrings__SupportDb: "Host=postgres;Port=5432;Database=support_db;Username=app;Password=${DB_PASSWORD}"
+
+      Services__OrderUrl: "http://order:8080"
+      Services__LicenseUrl: "http://license-vault:8080"
+
+      Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
+      Keycloak__Issuer: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}/realms/marketplace"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      order:
+        condition: service_started
+      license-vault:
+        condition: service_started
+      keycloak:
+        condition: service_started
+
+    networks:
+      - backend
+
+    restart: unless-stopped
+
+
   gateway:
     build:
       context: .
@@ -228,6 +259,7 @@ services:
       - order
       - license-vault
       - payment
+      - support
     networks:
       - backend
     restart: unless-stopped

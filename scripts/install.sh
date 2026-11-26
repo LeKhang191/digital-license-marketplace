@@ -88,7 +88,7 @@ bash scripts/configure-rabbitmq.sh
 # Dừng backend nếu đang chạy
 echo "[2/4] Stopping application services..."
 
-docker compose stop gateway order catalog license-vault payment notification
+docker compose stop gateway order catalog license-vault payment notification support
 
 # Thực hiện database migration
 echo "[3/4] Applying database migrations..."
@@ -100,7 +100,7 @@ echo "[4/4] Building and starting backend..."
 
 docker compose up -d --build --wait --wait-timeout 120 notification
 
-docker compose up -d --build catalog order license-vault payment gateway
+docker compose up -d --build catalog order license-vault payment support gateway
 
 # Hiển thị trạng thái
 echo ""

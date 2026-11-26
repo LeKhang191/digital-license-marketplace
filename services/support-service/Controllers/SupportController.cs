@@ -5,18 +5,18 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using OrderService.Application.DTOs;
-using OrderService.Domain.Entities;
-using OrderService.Infrastructure.Persistence;
+using SupportService.Application.DTOs;
+using SupportService.Domain.Entities;
+using SupportService.Infrastructure.Persistence;
 
-namespace OrderService.Controllers;
+namespace SupportService.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/support/tickets")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class SupportController(
-    OrderDbContext db,
+    SupportDbContext db,
     IHttpClientFactory clients
 ) : ControllerBase
 {
@@ -46,6 +46,17 @@ public sealed class SupportController(
         ["REFUND_REQUEST"] = "transaction_auditor",
         ["OTHER"] = "transaction_auditor"
     };
+
+    private sealed record OwnedOrderItem(
+        Guid Id,
+        Guid ProductId
+    );
+
+    private sealed record OwnedOrder(
+        Guid Id,
+        string Status,
+        List<OwnedOrderItem> Items
+    );
 
     private sealed record OwnedLicense(
         Guid Id,
@@ -79,19 +90,19 @@ public sealed class SupportController(
         => category switch
         {
             "INVALID_KEY" or "KEY_ALREADY_USED"
-                => status == OrderStatus.Completed,
+                => status == "COMPLETED",
 
             "KEY_NOT_RECEIVED"
-                => status == OrderStatus.Paid,
+                => status == "PAID",
 
             "PAYMENT_ISSUE"
-                => status == OrderStatus.Pending ||
-                   status == OrderStatus.Paid ||
-                   status == OrderStatus.Completed,
+                => status == "PENDING" ||
+                   status == "PAID" ||
+                   status == "COMPLETED",
 
             "REFUND_REQUEST"
-                => status == OrderStatus.Paid ||
-                   status == OrderStatus.Completed,
+                => status == "PAID" ||
+                   status == "COMPLETED",
 
             "OTHER" => true,
 
@@ -101,8 +112,54 @@ public sealed class SupportController(
     private static bool NeedsLicense(string category)
         => category is "INVALID_KEY" or "KEY_ALREADY_USED";
 
+    private async Task<OwnedOrder?> VerifyOrderAsync(
+        Guid orderId, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"api/orders/{orderId:D}");
+
+        if (!AuthenticationHeaderValue.TryParse(
+                Request.Headers.Authorization.ToString(),
+                out var auth) ||
+            !string.Equals(auth.Scheme, "Bearer",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new HttpRequestException(
+                "Missing bearer token");
+        }
+
+        request.Headers.Authorization = auth;
+
+        using var response = await clients
+            .CreateClient("SupportOrders")
+            .SendAsync(request, ct);
+
+        if (response.StatusCode ==
+            System.Net.HttpStatusCode.NotFound)
+            return null;
+
+        response.EnsureSuccessStatusCode();
+
+        var order = await response.Content
+            .ReadFromJsonAsync<OwnedOrder>(
+                cancellationToken: ct)
+            ?? throw new JsonException(
+                "Invalid order response");
+
+        if (order.Id != orderId ||
+            order.Items is null ||
+            string.IsNullOrWhiteSpace(order.Status))
+        {
+            throw new JsonException(
+                "Invalid order data");
+        }
+
+        return order;
+    }
+
     private async Task<bool> VerifyLicenseAsync(
-        Guid licenseId, Order order, CancellationToken ct)
+        Guid licenseId, OwnedOrder order, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
@@ -174,12 +231,21 @@ public sealed class SupportController(
                 "Invalid ticket information.");
         }
 
-        var order = await db.Orders
-            .AsNoTracking()
-            .Include(x => x.Items)
-            .SingleOrDefaultAsync(x =>
-                x.Id == request.OrderId &&
-                x.KeycloakUserId == UserId, ct);
+        OwnedOrder? order;
+
+        try
+        {
+            order = await VerifyOrderAsync(
+                request.OrderId, ct);
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException or JsonException ||
+            (ex is OperationCanceledException &&
+             !ct.IsCancellationRequested))
+        {
+            return Error(503, "ORDER_SERVICE_UNAVAILABLE",
+                "Unable to verify order ownership.");
+        }
 
         if (order is null)
             return NotFound();
@@ -198,7 +264,7 @@ public sealed class SupportController(
 
         if (request.LicenseId.HasValue)
         {
-            if (order.Status != OrderStatus.Completed)
+            if (order.Status != "COMPLETED")
                 return Error(409, "INVALID_ORDER_STATUS",
                     "Order has no eligible delivered license.");
 

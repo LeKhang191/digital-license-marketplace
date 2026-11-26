@@ -1,3 +1,4 @@
+using Marketplace.Shared.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,8 @@ namespace OrderService.Controllers;
     NoStore = true,
     Location = ResponseCacheLocation.None)]
 public sealed class RefundsController(
-    OrderDbContext db
+    OrderDbContext db,
+    IConfiguration config
 ) : ControllerBase
 {
     private string? UserId =>
@@ -85,12 +87,20 @@ public sealed class RefundsController(
                 x.Status == "ASSIGNED", ct);
     }
 
+    public sealed record DefectRefundRequest(
+        Guid Id,
+        Guid OrderId,
+        Guid? LicenseId,
+        string CustomerId,
+        string HandledBy
+    );
+
     private static string TicketReason(Guid ticketId)
         => $"Verified defective license: ticket {ticketId:D}";
 
     private static bool MatchesTicket(
         RefundOperation operation,
-        SupportTicket ticket)
+        DefectRefundRequest ticket)
         => operation.Mode == "VERIFIED_DEFECT" &&
            operation.DefectiveLicenseId == ticket.LicenseId &&
            operation.CustomerId == ticket.CustomerId &&
@@ -216,52 +226,39 @@ public sealed class RefundsController(
             : Ok(Response(operation));
     }
 
-    [HttpPost("api/support/tickets/{id:guid}/refund")]
+    [HttpPost("api/internal/support/tickets/{id:guid}/refund")]
     [Authorize(Roles = "license_coordinator")]
     public async Task<IActionResult> ApproveDefectRefund(
         Guid id,
+        DefectRefundRequest ticket,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(UserId))
+        if (string.IsNullOrWhiteSpace(UserId) ||
+            !new InternalServiceAuth(config).Validate(Request))
+        {
             return Unauthorized();
+        }
 
-        var candidate = await db.SupportTickets
-            .AsNoTracking()
-            .SingleOrDefaultAsync(x =>
-                x.Id == id &&
-                x.AssignedRole == "license_coordinator" &&
-                x.HandledBy == UserId, ct);
-
-        if (candidate is null)
-            return NotFound();
+        if (ticket.Id != id ||
+            ticket.OrderId == Guid.Empty ||
+            ticket.LicenseId is null ||
+            ticket.LicenseId == Guid.Empty ||
+            ticket.HandledBy != UserId ||
+            string.IsNullOrWhiteSpace(ticket.CustomerId))
+        {
+            return BadRequest();
+        }
 
         await using var tx =
             await db.Database.BeginTransactionAsync(ct);
 
         var existing = await LockOperationAsync(
-            candidate.OrderId, ct);
+            ticket.OrderId, ct);
 
         var order = await LockOrderAsync(
-            candidate.OrderId, ct);
+            ticket.OrderId, ct);
 
-        if (order is null)
-            return NotFound();
-
-        var tickets = await db.SupportTickets
-            .FromSqlInterpolated($"""
-                SELECT *
-                FROM support_tickets
-                WHERE "Id" = {id}
-                FOR UPDATE
-                """)
-            .ToListAsync(ct);
-
-        var ticket = tickets.SingleOrDefault();
-
-        if (ticket is null ||
-            ticket.OrderId != candidate.OrderId ||
-            ticket.AssignedRole != "license_coordinator" ||
-            ticket.HandledBy != UserId ||
+        if (order is null ||
             ticket.CustomerId != order.KeycloakUserId)
         {
             return NotFound();
@@ -272,18 +269,6 @@ public sealed class RefundsController(
         {
             await tx.CommitAsync(ct);
             return Ok(Response(existing));
-        }
-
-        if (ticket.Status != "IN_PROGRESS" ||
-            ticket.Category is not (
-                "INVALID_KEY" or "KEY_ALREADY_USED") ||
-            ticket.LicenseId is null ||
-            ticket.LicenseId == Guid.Empty)
-        {
-            return Conflict(new
-            {
-                code = "TICKET_NOT_ELIGIBLE"
-            });
         }
 
         if (existing is null)
@@ -349,48 +334,34 @@ public sealed class RefundsController(
         if (existing is null)
             db.RefundOperations.Add(operation);
 
-        // Preserve the staff approval in the support history.
-        db.SupportMessages.Add(new SupportMessage
-        {
-            TicketId = ticket.Id,
-            SenderId = UserId!,
-            SenderRole = "license_coordinator",
-            Content =
-                $"Defective license refund approved. Request: {operation.RequestId:D}"
-        });
-
-        ticket.Version = Guid.NewGuid();
-        ticket.UpdatedAtUtc = DateTime.UtcNow;
-
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
         return Accepted(Response(operation));
     }
 
-    [HttpGet("api/support/tickets/{id:guid}/refund")]
+    [HttpGet("api/internal/support/tickets/{id:guid}/refund")]
     [Authorize(Roles = "license_coordinator")]
     public async Task<IActionResult> GetSupportRefund(
         Guid id,
+        [FromQuery] Guid orderId,
+        [FromQuery] Guid licenseId,
+        [FromQuery] string customerId,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(UserId))
+        if (string.IsNullOrWhiteSpace(UserId) ||
+            !new InternalServiceAuth(config).Validate(Request))
+        {
             return Unauthorized();
+        }
 
-        var ticket = await db.SupportTickets
-            .AsNoTracking()
-            .SingleOrDefaultAsync(x =>
-                x.Id == id &&
-                x.AssignedRole == "license_coordinator" &&
-                x.HandledBy == UserId, ct);
-
-        if (ticket is null)
-            return NotFound();
+        var ticket = new DefectRefundRequest(
+            id, orderId, licenseId, customerId, UserId!);
 
         var operation = await db.RefundOperations
             .AsNoTracking()
             .SingleOrDefaultAsync(
-                x => x.OrderId == ticket.OrderId, ct);
+                x => x.OrderId == orderId, ct);
 
         return operation is not null &&
                MatchesTicket(operation, ticket)

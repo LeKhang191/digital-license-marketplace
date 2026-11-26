@@ -1,4 +1,4 @@
-namespace OrderService.Domain.Entities;
+namespace SupportService.Domain.Entities;
 
 public sealed class SupportTicket
 {

@@ -32,7 +32,7 @@ WORKERS = 8
 
 print("===== LOGIN =====")
 
-customer = t.login("customer")
+customer = t.login("test-user1")
 
 t.MANAGER = t.login("catalog_manager")
 t.COORDINATOR = t.login("license_coordinator")

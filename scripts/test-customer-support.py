@@ -38,8 +38,8 @@ def check(name, condition):
 
 print("===== LOGIN =====")
 
-customer = t.login("customer")
-other = t.login("customer2")
+customer = t.login("test-user1")
+other = t.login("test-user2")
 coordinator = t.login("license_coordinator")
 auditor = t.login("transaction_auditor")
 

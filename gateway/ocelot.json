@@ -48,7 +48,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
-          "Host": "order",
+          "Host": "support",
           "Port": 8080
         }
       ],
@@ -64,7 +64,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
-          "Host": "order",
+          "Host": "support",
           "Port": 8080
         }
       ],

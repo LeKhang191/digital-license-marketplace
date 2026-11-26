@@ -24,6 +24,11 @@
 
 
   <ItemGroup>
+    <Compile Include="../../shared/Infrastructure/Security/InternalServiceAuth.cs"
+             Link="Shared/Security/InternalServiceAuth.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="../../shared/Infrastructure/Security/KeycloakAuthentication.cs" Link="Shared/Security/KeycloakAuthentication.cs" />
     <Compile Include="../../shared/Infrastructure/Messaging/RabbitMqPublisher.cs" Link="Shared/Messaging/RabbitMqPublisher.cs" />
   </ItemGroup>

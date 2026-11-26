@@ -130,7 +130,59 @@ docker compose --profile migration build migrator
 echo "[4/4] Applying migrations..."
 
 docker compose --profile migration run --rm migrator catalog
-docker compose --profile migration run --rm migrator order
+# Prepare Support before applying destructive Order cleanup.
+
+bash scripts/migrate-support.sh
+
+SUPPORT_CLEANUP="20261127010000_RemoveLegacyCustomerSupport"
+
+cleanup_applied=$(query_db order_db "
+    SELECT CASE WHEN to_regclass(
+        'public.\"__EFMigrationsHistory\"'
+    ) IS NULL THEN 0 ELSE 1 END;
+")
+
+if [[ "$cleanup_applied" == "1" ]]; then
+    cleanup_applied=$(query_db order_db "
+        SELECT count(*)
+        FROM \"__EFMigrationsHistory\"
+        WHERE \"MigrationId\" = '$SUPPORT_CLEANUP';
+    ")
+fi
+
+if [[ "$cleanup_applied" == "0" ]]; then
+
+    for service in gateway order support license-vault; do
+        if [[ -n "$(docker compose ps --status running -q "$service")" ]]; then
+            echo "[STOP] $service must be stopped before Support migration."
+            exit 1
+        fi
+    done
+
+    # Apply all non-destructive Order migrations first.
+    docker compose --profile migration run --rm migrator \
+        order 20261126120000_AddVerifiedCustomerEmail
+
+    # Preserve legacy data before dropping tables.
+    umask 077
+    mkdir -p backups
+
+    backup="backups/support-cleanup-$(date +%Y%m%d-%H%M%S).dump"
+
+    docker compose exec -T postgres \
+        pg_dump -U app -d order_db -Fc \
+        -t support_tickets -t support_messages \
+        > "$backup"
+
+    test -s "$backup"
+
+    echo "[PASS] Legacy Support backup created."
+
+    bash scripts/cutover-support-data.sh
+fi
+
+docker compose --profile migration run --rm migrator \
+    order "$SUPPORT_CLEANUP"
 docker compose --profile migration run --rm migrator license
 docker compose --profile migration run --rm migrator payment
 

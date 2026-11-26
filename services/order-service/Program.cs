@@ -58,16 +58,7 @@ builder.Services.AddHttpClient<PaymentClient>(client =>
 .ConfigurePrimaryHttpMessageHandler(() =>
     new HttpClientHandler { AllowAutoRedirect = false });
 
-builder.Services.AddHttpClient("SupportLicenses", client =>
-{
-    var url = builder.Configuration["Services:LicenseUrl"]
-        ?? "http://license-vault:8080";
 
-    client.BaseAddress = new Uri(url.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(5);
-})
-.ConfigurePrimaryHttpMessageHandler(() =>
-    new HttpClientHandler { AllowAutoRedirect = false });
 
 builder.Services.Configure<RabbitMqOptions>(
     builder.Configuration.GetSection("RabbitMq"));

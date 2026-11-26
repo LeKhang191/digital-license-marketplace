@@ -49,6 +49,20 @@ builder.Services.AddHttpClient("LicenseOrders", client =>
         AllowAutoRedirect = false
     });
 
+// Support ticket eligibility
+builder.Services.AddHttpClient("LicenseSupport", client =>
+{
+    client.BaseAddress = new Uri(
+        (builder.Configuration["Services:SupportUrl"]
+        ?? "http://support:8080").TrimEnd('/') + "/");
+
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(
+    () => new HttpClientHandler
+    {
+        AllowAutoRedirect = false
+    });
+
 // Encryption
 builder.Services.Configure<LicenseEncryptionOptions>(
     builder.Configuration.GetSection("LicenseEncryption"));

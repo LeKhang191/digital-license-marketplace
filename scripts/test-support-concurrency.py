@@ -101,7 +101,7 @@ def parallel(method, path, token, data):
 
 print("===== LOGIN =====")
 
-customer = t.login("customer")
+customer = t.login("test-user1")
 staff = t.login("license_coordinator")
 
 status, licenses = call(

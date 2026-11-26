@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OrderService.Application.DTOs;
 using OrderService.Domain.Entities;
 using OrderService.Infrastructure.Catalog;
+using OrderService.Infrastructure.License;
 using OrderService.Infrastructure.Persistence;
 using OrderService.Infrastructure.VnPay;
 
@@ -12,6 +13,8 @@ public static class OrderErrors
     public const string ProductNotFound = "Product not found";
     public const string OrderNotFound = "Order not found";
     public const string NotPayable = "Order is not payable";
+    public const string InsufficientStock = "INSUFFICIENT_STOCK";
+    public const string InventoryUnavailable = "INVENTORY_UNAVAILABLE";
     public const string PaymentNotConfigured = "PAYMENT_NOT_CONFIGURED";
 }
 
@@ -34,6 +37,7 @@ public interface IOrderManager
 public sealed class OrderManager(
     OrderDbContext db,
     ICatalogClient catalog,
+    LicenseClient licenses,
     VnPayService vnpay
 ) : IOrderManager
 {
@@ -51,6 +55,15 @@ public sealed class OrderManager(
 
         if (product is null || !product.IsActive)
             return (null, OrderErrors.ProductNotFound);
+
+        var available = await licenses.GetAvailableAsync(
+            product.Id, ct);
+
+        if (available is null)
+            return (null, OrderErrors.InventoryUnavailable);
+
+        if (available.Value < request.Quantity)
+            return (null, OrderErrors.InsufficientStock);
 
         var order = new Order
         {
@@ -92,6 +105,27 @@ public sealed class OrderManager(
         if (order is null) return (null, OrderErrors.OrderNotFound);
         if (order.Status != OrderStatus.Pending)
             return (null, OrderErrors.NotPayable);
+
+        if (order.Items.Count == 0)
+            return (null, OrderErrors.NotPayable);
+
+        foreach (var group in order.Items.GroupBy(i => i.ProductId))
+        {
+            var product = await catalog.GetProductAsync(
+                group.Key, ct);
+
+            if (product is null || !product.IsActive)
+                return (null, OrderErrors.ProductNotFound);
+
+            var available = await licenses.GetAvailableAsync(
+                group.Key, ct);
+
+            if (available is null)
+                return (null, OrderErrors.InventoryUnavailable);
+
+            if (available.Value < group.Count())
+                return (null, OrderErrors.InsufficientStock);
+        }
 
         order.PaymentRef = NewPaymentRef(order.Id);
         await db.SaveChangesAsync(ct);

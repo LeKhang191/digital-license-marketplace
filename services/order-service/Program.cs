@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OrderService.Application.Services;
 using OrderService.Infrastructure.Catalog;
+using OrderService.Infrastructure.License;
 using OrderService.Infrastructure.Messaging;
 using OrderService.Infrastructure.Persistence;
 using OrderService.Infrastructure.Security;
@@ -23,6 +24,17 @@ builder.Services.AddDbContext<OrderDbContext>(
 builder.Services.AddHttpClient<ICatalogClient, CatalogClient>(client =>
 {
     client.BaseAddress = new Uri(catalogUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+builder.Services.AddHttpClient<LicenseClient>(client =>
+{
+    var licenseUrl = builder.Configuration["Services:LicenseUrl"]
+        ?? "http://license-vault:8080";
+
+    client.BaseAddress = new Uri(
+        licenseUrl.TrimEnd('/') + "/");
+
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 

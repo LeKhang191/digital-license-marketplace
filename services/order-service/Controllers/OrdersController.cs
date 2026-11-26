@@ -50,10 +50,23 @@ public sealed class OrdersController(
     {
         if (UserId is null) return Unauthorized();
 
-        var (order, error) = await orders.PayAsync(
-            UserId, id, ClientIp(), ct);
+        try
+        {
+            var (order, error) = await orders.PayAsync(
+                UserId, id, ClientIp(), ct);
 
-        return error is not null ? MapError(error) : Ok(order);
+            return error is not null ? MapError(error) : Ok(order);
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException ||
+            (ex is OperationCanceledException &&
+             !ct.IsCancellationRequested))
+        {
+            return StatusCode(503, new
+            {
+                error = "Catalog service unavailable"
+            });
+        }
     }
 
     [HttpGet]
@@ -77,6 +90,16 @@ public sealed class OrdersController(
         OrderErrors.PaymentNotConfigured => StatusCode(503,
             new { error = "VNPay is not configured" }),
         OrderErrors.OrderNotFound => NotFound(),
+        OrderErrors.InsufficientStock => Conflict(new
+        {
+            code = OrderErrors.InsufficientStock,
+            error = "Không đủ License Key trong kho."
+        }),
+        OrderErrors.InventoryUnavailable => StatusCode(503, new
+        {
+            code = OrderErrors.InventoryUnavailable,
+            error = "Tạm thời không thể kiểm tra tồn kho."
+        }),
         _ => BadRequest(new { error })
     };
 

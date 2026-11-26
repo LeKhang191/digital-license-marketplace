@@ -7,7 +7,9 @@ var cs = builder.Configuration.GetConnectionString("LicenseDb")
     ?? throw new InvalidOperationException("LicenseDb required");
 var key = Convert.FromBase64String(builder.Configuration["LicenseVault:EncryptionKey"] ?? "");
 if (key.Length != 32) throw new InvalidOperationException("LicenseVault requires a 32-byte base64 key");
-var store = new VaultStore(NpgsqlDataSource.Create(cs), key);
+var source = NpgsqlDataSource.Create(cs);
+var store = new VaultStore(source, key);
+var inbox = new FulfillmentInbox(source);
 await store.InitializeAsync();
 if (args.Length > 0 && args[0] == "import")
 {
@@ -16,7 +18,10 @@ if (args.Length > 0 && args[0] == "import")
     await store.ImportAsync(product);
     return;
 }
+await inbox.InitializeAsync();
 builder.Services.AddSingleton(store);
+builder.Services.AddSingleton(inbox);
+builder.Services.AddHostedService<FulfillmentRetryWorker>();
 builder.Services.AddHostedService<VaultWorker>();
 builder.Services.AddHostedService<DeliveryDispatchWorker>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>

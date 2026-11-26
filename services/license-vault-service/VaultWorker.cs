@@ -1,10 +1,8 @@
-using System.Text.Json;
 using Contracts.Events;
 using RabbitMQ.Client;
 
-public sealed class VaultWorker(IConfiguration config, VaultStore store, ILogger<VaultWorker> log) : BackgroundService
+public sealed class VaultWorker(IConfiguration config, FulfillmentInbox inbox, ILogger<VaultWorker> log) : BackgroundService
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -23,26 +21,15 @@ public sealed class VaultWorker(IConfiguration config, VaultStore store, ILogger
                 {
                     var delivery = await channel.BasicGetAsync(queue, autoAck: false, cancellationToken: ct);
                     if (delivery is null) { await Task.Delay(1000, ct); continue; }
-                    OrderPaidEvent? evt;
-                    try { evt = JsonSerializer.Deserialize<OrderPaidEvent>(delivery.Body.Span, Json); }
-                    catch (JsonException) { evt = null; }
-                    if (evt is null || evt.Items is null || evt.Items.Count == 0 || evt.Items.Select(i => i.ItemId).Distinct().Count() != evt.Items.Count)
+                    var evt = FulfillmentInbox.Parse(delivery.Body);
+                    if (evt is null)
                     {
-                        // No DLX configured yet: leave invalid message unacknowledged and stop this session for inspection.
-                        log.LogError("Invalid order.paid message; manual intervention required");
-                        throw new InvalidOperationException("Invalid order.paid payload");
+                        await inbox.RejectAsync(delivery.Body, ct);
+                        log.LogWarning("Invalid order.paid message quarantined");
                     }
-                    if (await store.AllocateAsync(evt, ct) == true)
-                    {
-                        await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken: ct);
-                        log.LogInformation("Keys allocated for order {OrderId}", evt.OrderId);
-                    }
-                    else
-                    {
-                        log.LogWarning("Insufficient stock for order {OrderId}; retry after restock", evt.OrderId);
-                        await channel.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: true, cancellationToken: ct);
-                        await Task.Delay(TimeSpan.FromSeconds(15), ct);
-                    }
+                    else await inbox.AcceptAsync(evt, ct);
+                    // ACK only after the durable inbox or quarantine write succeeds.
+                    await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken: ct);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }

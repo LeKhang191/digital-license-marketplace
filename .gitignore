@@ -502,3 +502,16 @@ __pycache__/
 # Local backups
 .env.backup
 backups/
+
+# Local source archives
+*.zip
+*.tar.gz
+
+# Private credentials
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+secrets/
+credentials/

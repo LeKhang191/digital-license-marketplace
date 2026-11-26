@@ -17,6 +17,17 @@ if [[ -z "$LICENSE_MIGRATION" ]]; then
     exit 1
 fi
 
+PAYMENT_MIGRATION=$(basename "$(find \
+    services/payment-service/Infrastructure/Persistence/Migrations \
+    -maxdepth 1 \
+    -name '*_InitialCreate.cs' \
+    -print -quit)" .cs)
+
+if [[ -z "$PAYMENT_MIGRATION" ]]; then
+    echo "ERROR: Payment initial migration is missing."
+    exit 1
+fi
+
 query_db() {
     local database="$1"
     local sql="$2"
@@ -96,10 +107,22 @@ if [[ "$(query_db postgres \
         -v ON_ERROR_STOP=1 \
         -c 'CREATE DATABASE license_db;'
 fi
+if [[ "$(query_db postgres \
+    "SELECT count(*) FROM pg_database WHERE datname = 'payment_db';")" == "0" ]]; then
+
+    echo "[Database] Creating payment_db..."
+
+    docker compose exec -T postgres \
+        psql -X -U app -d postgres \
+        -v ON_ERROR_STOP=1 \
+        -c 'CREATE DATABASE payment_db;'
+fi
+
 echo "[2/4] Checking databases..."
 check_database catalog_db "$CATALOG_MIGRATION"
 check_database order_db "$ORDER_MIGRATION"
 check_database license_db "$LICENSE_MIGRATION"
+check_database payment_db "$PAYMENT_MIGRATION"
 
 echo "[3/4] Building migration image..."
 docker compose --profile migration build migrator
@@ -109,6 +132,7 @@ echo "[4/4] Applying migrations..."
 docker compose --profile migration run --rm migrator catalog
 docker compose --profile migration run --rm migrator order
 docker compose --profile migration run --rm migrator license
+docker compose --profile migration run --rm migrator payment
 
 echo "================================="
 echo " Database migrations completed."

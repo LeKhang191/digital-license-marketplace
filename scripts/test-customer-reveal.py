@@ -68,4 +68,56 @@ if key.startswith("DEMO-ALLOC-"):
 else:
     print("Key hidden in terminal for security.")
 
+
+first = result.get("revealedAtUtc")
+
+assert first, "[FAIL] Missing reveal timestamp"
+
+assert result.get("isRevealed") is True
+
+print("[PASS] Reveal timestamp recorded")
+
+again = t.request(
+    "GET",
+    f"/licenses/me/{license_id}/reveal",
+    token
+)
+
+assert again.get("licenseKey") == key
+
+assert again.get("revealedAtUtc") == first
+
+print("[PASS] Reveal timestamp preserved")
+
+post = t.request(
+    "POST",
+    f"/licenses/me/{license_id}/reveal",
+    token
+)
+
+assert post.get("licenseKey") == key
+
+assert post.get("revealedAtUtc") == first
+
+print("[PASS] POST reveal supported")
+
+updated = t.request(
+    "GET",
+    "/licenses/me",
+    token
+)
+
+item = next(
+    x for x in updated
+    if x["id"] == license_id
+)
+
+assert item.get("isRevealed") is True
+
+assert item.get("revealedAtUtc") == first
+
+assert "licenseKey" not in item
+
+print("[PASS] List metadata updated without plaintext")
+
 print("\n[PASS] Customer License Delivery")

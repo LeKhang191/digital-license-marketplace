@@ -1,6 +1,49 @@
 {
   "Routes": [
     {
+      "DownstreamPathTemplate": "/api/orders/{id}/refund",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/orders/{id}/refund",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/wallet/me/transactions",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "payment",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/wallet/me/transactions",
+      "UpstreamHttpMethod": [
+        "GET"
+      ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/wallet/me",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "payment",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/wallet/me",
+      "UpstreamHttpMethod": [
+        "GET"
+      ]
+    },
+    {
       "DownstreamPathTemplate": "/api/support/tickets/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
@@ -83,7 +126,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
-          "Host": "order",
+          "Host": "payment",
           "Port": 8080
         }
       ],

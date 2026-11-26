@@ -87,9 +87,20 @@ public sealed class OrdersController(
 
     private IActionResult MapError(string error) => error switch
     {
-        OrderErrors.PaymentNotConfigured => StatusCode(503,
+        OrderErrors.PaymentNotConfigured or OrderErrors.PaymentUnavailable => StatusCode(503,
             new { error = "VNPay is not configured" }),
         OrderErrors.OrderNotFound => NotFound(),
+
+        OrderErrors.InsufficientWalletBalance => Conflict(new
+        {
+            code = OrderErrors.InsufficientWalletBalance,
+            error = "Số dư Marketplace Balance không đủ."
+        }),
+
+        OrderErrors.InvalidPaymentMethod => BadRequest(new
+        {
+            code = OrderErrors.InvalidPaymentMethod
+        }),
         OrderErrors.PaymentExpired => Conflict(new
         {
             code = OrderErrors.PaymentExpired,

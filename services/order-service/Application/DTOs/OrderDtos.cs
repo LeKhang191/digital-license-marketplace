@@ -10,6 +10,8 @@ public sealed class CreateOrderRequest
 
     [Range(1, 10)]
     public int Quantity { get; set; } = 1;
+
+    public string PaymentMethod { get; set; } = "VNPAY";
 }
 
 public sealed record OrderItemResponse(
@@ -24,7 +26,8 @@ public sealed record OrderResponse(
     DateTime CreatedAtUtc,
     IReadOnlyList<OrderItemResponse> Items,
     string? PaymentUrl = null,
-    string FulfillmentStatus = "NOT_STARTED")
+    string FulfillmentStatus = "NOT_STARTED",
+    string PaymentMethod = "VNPAY")
 {
     public static OrderResponse From(
         Order o,
@@ -43,5 +46,6 @@ public sealed record OrderResponse(
             OrderStatus.Refunding => "UNKNOWN",
             OrderStatus.Refunded => "UNKNOWN",
             _ => "NOT_STARTED"
-        }));
+        }),
+        PaymentMethod: o.PaymentMethod);
 }

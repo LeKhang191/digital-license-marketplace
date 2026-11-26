@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using OrderService.Infrastructure.Refund;
+using OrderService.Infrastructure.Workers;
 using OrderService.Application.Services;
 using OrderService.Infrastructure.Catalog;
 using OrderService.Infrastructure.License;
 using OrderService.Infrastructure.Messaging;
 using OrderService.Infrastructure.Persistence;
+using OrderService.Infrastructure.Payment;
 using OrderService.Infrastructure.Security;
-using OrderService.Infrastructure.VnPay;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +40,24 @@ builder.Services.AddHttpClient<LicenseClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 
+builder.Services.AddHttpClient<PaymentClient>(client =>
+{
+    var url = builder.Configuration["Services:PaymentUrl"]
+        ?? "http://payment:8080";
+
+    var key = builder.Configuration["InternalService:Key"]
+        ?? throw new InvalidOperationException(
+            "Internal service key is missing");
+
+    client.BaseAddress = new Uri(url.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+
+    client.DefaultRequestHeaders.Add(
+        "X-Internal-Service-Key", key);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+    new HttpClientHandler { AllowAutoRedirect = false });
+
 builder.Services.AddHttpClient("SupportLicenses", client =>
 {
     var url = builder.Configuration["Services:LicenseUrl"]
@@ -49,16 +69,12 @@ builder.Services.AddHttpClient("SupportLicenses", client =>
 .ConfigurePrimaryHttpMessageHandler(() =>
     new HttpClientHandler { AllowAutoRedirect = false });
 
-builder.Services.Configure<VnPayOptions>(
-    builder.Configuration.GetSection("VnPay"));
 builder.Services.Configure<RabbitMqOptions>(
     builder.Configuration.GetSection("RabbitMq"));
 
-builder.Services.AddSingleton<VnPayService>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddHostedService<OutboxWorker>();
 builder.Services.AddScoped<IOrderManager, OrderManager>();
-builder.Services.AddScoped<VnPayIpnHandler>();
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();
@@ -68,6 +84,51 @@ builder.Services.AddHealthChecks();
 builder.Services.AddScoped<OrderFulfillmentService>();
 
 builder.Services.AddHostedService<OrderLicenseEventsConsumer>();
+
+builder.Services.AddScoped<OrderPaymentService>();
+builder.Services.AddHostedService<OrderPaymentEventsConsumer>();
+
+// Refund orchestration
+var refundInternalKey =
+    builder.Configuration["InternalService:Key"]
+    ?? throw new InvalidOperationException(
+        "Internal service key is missing");
+
+foreach (var endpoint in new[]
+{
+    (
+        Name: "RefundLicense",
+        Url: builder.Configuration["Services:LicenseUrl"]
+             ?? "http://license-vault:8080"
+    ),
+    (
+        Name: "RefundPayment",
+        Url: builder.Configuration["Services:PaymentUrl"]
+             ?? "http://payment:8080"
+    )
+})
+{
+    builder.Services.AddHttpClient(endpoint.Name, client =>
+    {
+        client.BaseAddress =
+            new Uri(endpoint.Url.TrimEnd('/') + "/");
+
+        client.Timeout = TimeSpan.FromSeconds(10);
+
+        client.DefaultRequestHeaders.Add(
+            "X-Internal-Service-Key",
+            refundInternalKey);
+    })
+    .ConfigurePrimaryHttpMessageHandler(() =>
+        new HttpClientHandler
+        {
+            AllowAutoRedirect = false
+        });
+}
+
+builder.Services.AddScoped<RefundClient>();
+builder.Services.AddScoped<RefundOrchestrator>();
+builder.Services.AddHostedService<RefundWorker>();
 
 var app = builder.Build();
 

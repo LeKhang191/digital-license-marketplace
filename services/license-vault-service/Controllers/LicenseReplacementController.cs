@@ -170,6 +170,18 @@ public sealed class LicenseReplacementController(
         await using var transaction =
             await db.Database.BeginTransactionAsync(ct);
 
+        await LicenseOrderLock.AcquireAsync(
+            db, eligibility.OrderId, ct);
+
+        if (await db.LicenseRefundGuards.AnyAsync(
+            x => x.OrderId == eligibility.OrderId, ct))
+        {
+            return Error(
+                409,
+                "LICENSE_REFUND_LOCKED",
+                "Order is protected by a refund.");
+        }
+
         // Serialize retries for the same ticket.
         var lockKey = $"replacement:{ticketId:N}";
 

@@ -109,6 +109,9 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("RevealedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -132,6 +135,49 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                     b.ToTable("license_keys", null, t =>
                         {
                             t.HasCheckConstraint("CK_license_keys_Status", "\"Status\" IN ('AVAILABLE', 'ASSIGNED', 'DISABLED')");
+                        });
+                });
+
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.LicenseRefundGuard", b =>
+                {
+                    b.Property<Guid>("OrderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("FinalizedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("OrderId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.ToTable("license_refund_guards", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_license_refund_guard_mode", "\"Mode\" IN ('UNREVEALED', 'OUT_OF_STOCK', 'VERIFIED_DEFECT')");
+
+                            t.HasCheckConstraint("CK_license_refund_guard_status", "\"Status\" IN ('PREPARED', 'FINALIZED')");
                         });
                 });
 

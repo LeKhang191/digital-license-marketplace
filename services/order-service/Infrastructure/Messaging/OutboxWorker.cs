@@ -185,6 +185,23 @@ public sealed class OutboxWorker(
                 break;
             }
 
+            case EventRoutes.OrderRefunded:
+            {
+                var evt =
+                    JsonSerializer.Deserialize<OrderRefundedEvent>(
+                        message.Payload,
+                        Json)
+                    ?? throw new InvalidOperationException(
+                        "Invalid OrderRefundedEvent payload");
+
+                await publisher.PublishAsync(
+                    message.RoutingKey,
+                    evt,
+                    ct);
+
+                break;
+            }
+
             default:
                 throw new InvalidOperationException(
                     "Unsupported outbox routing key");

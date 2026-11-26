@@ -77,6 +77,8 @@ builder.Services.AddHealthChecks();
 
 // License allocation
 builder.Services.AddScoped<LicenseAllocationService>();
+builder.Services.AddScoped<LicenseRefundService>();
+builder.Services.AddSingleton<InternalServiceAuth>();
 
 // Enable the consumer explicitly when ready.
 builder.Services.AddHostedService<OrderPaidConsumer>();
@@ -89,6 +91,8 @@ builder.Services.AddSingleton<
 builder.Services.AddHostedService<AllocationOutboxWorker>();
 
 var app = builder.Build();
+
+_ = app.Services.GetRequiredService<InternalServiceAuth>();
 
 // Validate encryption configuration at startup
 _ = app.Services.GetRequiredService<ILicenseEncryption>();

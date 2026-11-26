@@ -4,6 +4,8 @@ public sealed class Order
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    public string PaymentMethod { get; set; } = "VNPAY";
+
     public string KeycloakUserId { get; set; } = "";
 
     public string? CustomerEmail { get; set; }

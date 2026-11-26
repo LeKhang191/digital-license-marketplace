@@ -222,6 +222,38 @@ public sealed class OrderFulfillmentService(
                 ProcessedAtUtc = DateTime.UtcNow
             });
 
+        // Automatic full refund for terminal stock failure.
+        // Synthetic allocation-only test orders have no payment reference.
+        if (status == "OUT_OF_STOCK" &&
+            order.PaidAtUtc is not null &&
+            order.TotalAmount > 0 &&
+            !string.IsNullOrWhiteSpace(order.PaymentRef))
+        {
+            var exists = await db.RefundOperations
+                .AnyAsync(
+                    x => x.OrderId == order.Id, ct);
+
+            if (!exists)
+            {
+                var now = DateTime.UtcNow;
+
+                db.RefundOperations.Add(new RefundOperation
+                {
+                    OrderId = order.Id,
+                    RequestId = Guid.NewGuid(),
+                    CustomerId = order.KeycloakUserId,
+                    PaymentRef = order.PaymentRef!,
+                    Mode = "OUT_OF_STOCK",
+                    Reason = "Automatic refund: insufficient license stock",
+                    RequestedBy = "SYSTEM",
+                    Status = "REQUESTED",
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    NextRetryAtUtc = now
+                });
+            }
+        }
+
         await db.SaveChangesAsync(ct);
 
         await transaction.CommitAsync(ct);

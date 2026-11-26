@@ -104,7 +104,9 @@ public sealed class CustomerLicensesController(
 
         try
         {
-            var query = Owned(customer);
+            var query = Owned(customer)
+                .Where(k => !db.LicenseRefundGuards
+                    .Any(g => g.OrderId == k.OrderId));
 
             if (orderId.HasValue)
                 query = query.Where(k => k.OrderId == orderId);
@@ -118,7 +120,9 @@ public sealed class CustomerLicensesController(
                     k.OrderId,
                     k.OrderItemId,
                     k.Status,
-                    k.AssignedAtUtc
+                    k.AssignedAtUtc,
+                    k.RevealedAtUtc,
+                    isRevealed = k.RevealedAtUtc != null
                 })
                 .ToListAsync(ct);
 
@@ -145,6 +149,7 @@ public sealed class CustomerLicensesController(
     }
 
     [HttpGet("{id:guid}/reveal")]
+    [HttpPost("{id:guid}/reveal")]
     public async Task<IActionResult> Reveal(
         Guid id,
         CancellationToken ct)
@@ -172,21 +177,62 @@ public sealed class CustomerLicensesController(
                 key.ProductId))
                 return NotFound();
 
-            var current = await Owned(customer)
-                .SingleOrDefaultAsync(k =>
-                    k.Id == id &&
-                    k.OrderId == key.OrderId &&
-                    k.OrderItemId == key.OrderItemId &&
-                    k.ProductId == key.ProductId, ct);
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(ct);
 
-            if (current is null)
+            if (key.OrderId is null)
                 return NotFound();
 
+            await LicenseOrderLock.AcquireAsync(
+                db, key.OrderId.Value, ct);
+
+            if (await db.LicenseRefundGuards.AnyAsync(
+                x => x.OrderId == key.OrderId.Value, ct))
+            {
+                return Conflict(new
+                {
+                    code = "LICENSE_REFUND_LOCKED"
+                });
+            }
+
+            var rows = await db.LicenseKeys
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM license_keys
+                    WHERE "Id" = {id}
+                      AND "CustomerId" = {customer}
+                      AND "Status" = {LicenseStatus.Assigned}
+                    FOR UPDATE
+                    """)
+                .ToListAsync(ct);
+
+            var current = rows.SingleOrDefault();
+
+            if (current is null ||
+                current.OrderId != key.OrderId ||
+                current.OrderItemId != key.OrderItemId ||
+                current.ProductId != key.ProductId ||
+                current.AssignedAtUtc is null)
+            {
+                return NotFound();
+            }
+
+            var plaintext = encryption.Decrypt(
+                current.EncryptedKey);
+
+            // Preserve the first disclosure timestamp.
+            current.RevealedAtUtc ??= DateTime.UtcNow;
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            // Never return plaintext before commit.
             return Ok(new
             {
                 id,
-                licenseKey = encryption.Decrypt(
-                    current.EncryptedKey)
+                licenseKey = plaintext,
+                revealedAtUtc = current.RevealedAtUtc,
+                isRevealed = true
             });
         }
         catch (Exception ex) when (

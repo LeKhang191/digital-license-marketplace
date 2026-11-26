@@ -10,6 +10,10 @@ public sealed class OrderDbContext(
 {
     public DbSet<Order> Orders => Set<Order>();
 
+    public DbSet<RefundOperation> RefundOperations =>
+        Set<RefundOperation>();
+
+
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
     public DbSet<OutboxMessage> OutboxMessages =>
@@ -27,6 +31,55 @@ public sealed class OrderDbContext(
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
+        var refund = modelBuilder.Entity<RefundOperation>();
+
+        refund.ToTable("refund_operations", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_refund_operations_status",
+                "\"Status\" IN ('REQUESTED', 'PREPARED', 'CREDITED', 'COMPLETED', 'REJECTED')");
+
+            table.HasCheckConstraint(
+                "CK_refund_operations_mode",
+                "\"Mode\" IN ('UNREVEALED', 'OUT_OF_STOCK', 'VERIFIED_DEFECT')");
+        });
+
+        refund.HasKey(x => x.OrderId);
+
+        refund.HasIndex(x => x.RequestId).IsUnique();
+
+        refund.HasIndex(x => new
+        {
+            x.Status,
+            x.NextRetryAtUtc
+        });
+
+        refund.Property(x => x.CustomerId)
+            .HasMaxLength(64).IsRequired();
+
+        refund.Property(x => x.PaymentRef)
+            .HasMaxLength(64).IsRequired();
+
+        refund.Property(x => x.RequestedBy)
+            .HasMaxLength(64).IsRequired();
+
+        refund.Property(x => x.Reason)
+            .HasMaxLength(500).IsRequired();
+
+        refund.Property(x => x.Mode)
+            .HasMaxLength(32).IsRequired();
+
+        refund.Property(x => x.Status)
+            .HasMaxLength(20).IsRequired();
+
+        refund.Property(x => x.LastError)
+            .HasMaxLength(500);
+
+        refund.HasOne<Order>()
+            .WithOne()
+            .HasForeignKey<RefundOperation>(x => x.OrderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         var ticket = modelBuilder.Entity<SupportTicket>();
 
         ticket.ToTable("support_tickets");
@@ -94,8 +147,18 @@ public sealed class OrderDbContext(
 
         var order = modelBuilder.Entity<Order>();
 
-        order.ToTable("orders");
+        order.ToTable("orders", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_orders_payment_method",
+                "\"PaymentMethod\" IN ('VNPAY', 'WALLET')");
+        });
         order.HasKey(o => o.Id);
+
+        order.Property(x => x.PaymentMethod)
+            .HasMaxLength(20)
+            .HasDefaultValue("VNPAY")
+            .IsRequired();
 
         order.HasIndex(o => o.KeycloakUserId);
         order.HasIndex(o => o.PaymentRef);

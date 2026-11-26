@@ -183,8 +183,8 @@ def history_count(ticket):
 
 print("===== LOGIN =====")
 
-customer = t.login("customer")
-other = t.login("customer2")
+customer = t.login(input("Customer username [test-user1]: ").strip() or "test-user1")
+other = t.login(input("Second customer username [test-user2]: ").strip() or "test-user2")
 
 t.MANAGER = t.login("catalog_manager")
 t.COORDINATOR = t.login("license_coordinator")

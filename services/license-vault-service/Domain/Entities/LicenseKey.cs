@@ -22,4 +22,6 @@ public sealed class LicenseKey
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public DateTime? AssignedAtUtc { get; set; }
+
+    public DateTime? RevealedAtUtc { get; set; }
 }

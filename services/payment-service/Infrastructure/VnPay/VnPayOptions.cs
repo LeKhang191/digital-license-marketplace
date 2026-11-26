@@ -1,4 +1,4 @@
-namespace OrderService.Infrastructure.VnPay;
+namespace PaymentService.Infrastructure.VnPay;
 
 public sealed class VnPayOptions
 {

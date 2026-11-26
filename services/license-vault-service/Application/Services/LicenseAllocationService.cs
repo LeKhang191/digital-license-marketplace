@@ -27,16 +27,9 @@ public sealed class LicenseAllocationService(
         await using var transaction =
             await db.Database.BeginTransactionAsync(ct);
 
-        // Serialize processing of the same order.
-        var lockKey = $"allocation:{message.OrderId:N}";
-
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-            SELECT pg_advisory_xact_lock(
-                hashtextextended({lockKey}, 0)
-            )
-            """,
-            ct);
+        // Shared lock for allocation and refund.
+        await LicenseOrderLock.AcquireAsync(
+            db, message.OrderId, ct);
 
         var previous = await db.AllocationResults
             .AsNoTracking()
@@ -59,6 +52,13 @@ public sealed class LicenseAllocationService(
                 message.OrderId);
 
             return;
+        }
+
+        if (await db.LicenseRefundGuards.AnyAsync(
+            x => x.OrderId == message.OrderId, ct))
+        {
+            throw new InvalidDataException(
+                "Order is protected by a refund guard.");
         }
 
         var selected = new List<(

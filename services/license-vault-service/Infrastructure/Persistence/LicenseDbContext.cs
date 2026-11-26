@@ -10,6 +10,10 @@ public sealed class LicenseDbContext(
 {
     public DbSet<LicenseKey> LicenseKeys => Set<LicenseKey>();
 
+    public DbSet<LicenseRefundGuard> LicenseRefundGuards =>
+        Set<LicenseRefundGuard>();
+
+
     public DbSet<AllocationResult> AllocationResults =>
         Set<AllocationResult>();
 
@@ -19,6 +23,37 @@ public sealed class LicenseDbContext(
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        var guard = modelBuilder.Entity<LicenseRefundGuard>();
+
+        guard.ToTable("license_refund_guards", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_license_refund_guard_status",
+                "\"Status\" IN ('PREPARED', 'FINALIZED')");
+
+            table.HasCheckConstraint(
+                "CK_license_refund_guard_mode",
+                "\"Mode\" IN ('UNREVEALED', 'OUT_OF_STOCK', 'VERIFIED_DEFECT')");
+        });
+
+        guard.HasKey(x => x.OrderId);
+
+        guard.HasIndex(x => x.RequestId)
+            .IsUnique();
+
+        guard.Property(x => x.CustomerId)
+            .HasMaxLength(255)
+            .IsRequired();
+
+        guard.Property(x => x.Mode)
+            .HasMaxLength(32)
+            .IsRequired();
+
+        guard.Property(x => x.Status)
+            .HasMaxLength(20)
+            .IsRequired();
+
 
         var replacement = modelBuilder.Entity<LicenseReplacement>();
 

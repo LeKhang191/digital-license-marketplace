@@ -42,6 +42,15 @@ docker compose exec -T rabbitmq \
     '^order\.license-events$' \
     '{"delivery-limit":5,"dead-letter-exchange":"marketplace.events.dead","dead-letter-routing-key":"order.license-events.dead","dead-letter-strategy":"at-least-once","overflow":"reject-publish"}'
 
+
+docker compose exec -T rabbitmq \
+    rabbitmqctl set_policy \
+    -p / \
+    --apply-to quorum_queues \
+    order-payment-events-dlx \
+    '^order\.payment-events$' \
+    '{"delivery-limit":5,"dead-letter-exchange":"marketplace.events.dead","dead-letter-routing-key":"order.payment-events.dead","dead-letter-strategy":"at-least-once","overflow":"reject-publish"}'
+
 echo "[OK] Retry policies configured."
 
 docker compose exec -T rabbitmq \

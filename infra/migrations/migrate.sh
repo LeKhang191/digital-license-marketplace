@@ -48,8 +48,22 @@ case "${1:-}" in
             --no-build
         ;;
 
+    payment)
+        : "${PAYMENT_CONNECTION:?Payment connection is required}"
+
+        echo "[Migration] Updating Payment database..."
+
+        EF_MIGRATIONS_CONNECTION="$PAYMENT_CONNECTION" \
+        dotnet ef database update \
+            --project services/payment-service/Payment.Api.csproj \
+            --startup-project services/payment-service/Payment.Api.csproj \
+            --context PaymentDbContext \
+            --configuration Release \
+            --no-build
+        ;;
+
     *)
-        echo "Usage: migrate.sh {catalog|order|license}" >&2
+        echo "Usage: migrate.sh {catalog|order|license|payment}" >&2
         exit 1
         ;;
 esac

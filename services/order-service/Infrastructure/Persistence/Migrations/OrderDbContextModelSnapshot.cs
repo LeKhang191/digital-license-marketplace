@@ -70,6 +70,13 @@ namespace OrderService.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("PaidEventSentAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("VNPAY");
+
                     b.Property<string>("PaymentRef")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -97,7 +104,10 @@ namespace OrderService.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PaymentRef");
 
-                    b.ToTable("orders", (string)null);
+                    b.ToTable("orders", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_orders_payment_method", "\"PaymentMethod\" IN ('VNPAY', 'WALLET')");
+                        });
                 });
 
             modelBuilder.Entity("OrderService.Domain.Entities.OrderItem", b =>
@@ -165,6 +175,81 @@ namespace OrderService.Infrastructure.Persistence.Migrations
                     b.HasIndex("PublishedAtUtc", "NextRetryAtUtc");
 
                     b.ToTable("outbox_messages", (string)null);
+                });
+
+            modelBuilder.Entity("OrderService.Domain.Entities.RefundOperation", b =>
+                {
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("DefectiveLicenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("NextRetryAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentRef")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("RefundId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("OrderId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextRetryAtUtc");
+
+                    b.ToTable("refund_operations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_refund_operations_mode", "\"Mode\" IN ('UNREVEALED', 'OUT_OF_STOCK', 'VERIFIED_DEFECT')");
+
+                            t.HasCheckConstraint("CK_refund_operations_status", "\"Status\" IN ('REQUESTED', 'PREPARED', 'CREDITED', 'COMPLETED', 'REJECTED')");
+                        });
                 });
 
             modelBuilder.Entity("OrderService.Domain.Entities.SupportMessage", b =>
@@ -288,6 +373,15 @@ namespace OrderService.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("OrderService.Domain.Entities.RefundOperation", b =>
+                {
+                    b.HasOne("OrderService.Domain.Entities.Order", null)
+                        .WithOne()
+                        .HasForeignKey("OrderService.Domain.Entities.RefundOperation", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OrderService.Domain.Entities.SupportMessage", b =>

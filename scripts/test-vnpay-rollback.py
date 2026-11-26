@@ -31,7 +31,7 @@ if TMN != "TEST0001" or not SECRET:
     )
 
 runtime = t.run([
-    "docker", "compose", "exec", "-T", "order",
+    "docker", "compose", "exec", "-T", "payment",
     "sh", "-c",
     'test "$VnPay__TmnCode" = TEST0001 && '
     'printf "%s" "$VnPay__HashSecret"'
@@ -39,6 +39,9 @@ runtime = t.run([
 
 if not hmac.compare_digest(runtime, SECRET):
     raise SystemExit("[STOP] Runtime configuration mismatch")
+
+if input("Type TEST for development environment: ") != "TEST":
+    raise SystemExit("Canceled")
 
 print("\n===== LOGIN =====")
 
@@ -67,7 +70,7 @@ def api(method, path, token=None, data=None):
         return e.code, body
 
 def sql(statement):
-    return t.sql("order_db", statement)
+    return t.sql("payment_db", statement)
 
 def lit(value):
     return t.literal(value)
@@ -107,8 +110,11 @@ def outbox_count(order):
     return int(sql(f"""
         SELECT count(*)
         FROM outbox_messages
-        WHERE "AggregateId" = {lit(order['id'])}
-          AND "RoutingKey" = 'order.paid';
+        WHERE "AggregateId" = (
+            SELECT "Id" FROM payments
+            WHERE "OrderId" = {lit(order['id'])}
+        )
+          AND "RoutingKey" = 'payment.succeeded';
     """))
 
 def params(order, **overrides):
@@ -188,8 +194,9 @@ def assigned_count():
 def payment_empty():
     return sql(f"""
         SELECT count(*)
-        FROM orders
-        WHERE "Id" = {oid}
+        FROM payments
+        WHERE "OrderId" = {oid}
+          AND "Status" = 'PENDING'
           AND "PaidAtUtc" IS NULL
           AND "VnpTransactionNo" IS NULL;
     """) == "1"
@@ -204,8 +211,11 @@ try:
         LANGUAGE plpgsql
         AS $$
         BEGIN
-            IF NEW."AggregateId" = {oid}
-               AND NEW."RoutingKey" = 'order.paid'
+            IF NEW."AggregateId" = (
+                SELECT "Id" FROM payments
+                WHERE "OrderId" = {oid}
+            )
+               AND NEW."RoutingKey" = 'payment.succeeded'
             THEN
                 RAISE EXCEPTION 'TEST_PAYMENT_OUTBOX_FAILURE';
             END IF;

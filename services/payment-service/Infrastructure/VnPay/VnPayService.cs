@@ -3,9 +3,9 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using OrderService.Domain.Entities;
+using PaymentService.Domain.Entities;
 
-namespace OrderService.Infrastructure.VnPay;
+namespace PaymentService.Infrastructure.VnPay;
 
 public sealed class VnPayService(IOptions<VnPayOptions> options)
 {
@@ -21,30 +21,30 @@ public sealed class VnPayService(IOptions<VnPayOptions> options)
     public static long ToVnpAmount(decimal total) =>
         (long)Math.Round(total, 0, MidpointRounding.AwayFromZero) * 100;
 
-    public bool IsPaymentExpired(Order order) =>
+    public bool IsPaymentExpired(Payment payment) =>
         DateTime.UtcNow >=
-            order.CreatedAtUtc.AddMinutes(O.ExpireMinutes);
+            payment.ExpiresAtUtc;
 
-    public string CreatePaymentUrl(Order order, string clientIp)
+    public string CreatePaymentUrl(Payment payment, string clientIp)
     {
-        var now = order.CreatedAtUtc.AddHours(7);
+        var now = payment.CreatedAtUtc.AddHours(7);
 
         var p = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["vnp_Version"] = "2.1.0",
             ["vnp_Command"] = "pay",
             ["vnp_TmnCode"] = O.TmnCode,
-            ["vnp_Amount"] = ToVnpAmount(order.TotalAmount)
+            ["vnp_Amount"] = ToVnpAmount(payment.Amount)
                 .ToString(CultureInfo.InvariantCulture),
             ["vnp_CreateDate"] = Fmt(now),
-            ["vnp_ExpireDate"] = Fmt(now.AddMinutes(O.ExpireMinutes)),
+            ["vnp_ExpireDate"] = Fmt(payment.ExpiresAtUtc.AddHours(7)),
             ["vnp_CurrCode"] = "VND",
             ["vnp_IpAddr"] = clientIp,
             ["vnp_Locale"] = O.Locale,
-            ["vnp_OrderInfo"] = $"Thanh toan don hang {order.Id:N}",
+            ["vnp_OrderInfo"] = $"Thanh toan don hang {payment.OrderId:N}",
             ["vnp_OrderType"] = "other",
             ["vnp_ReturnUrl"] = O.ReturnUrl,
-            ["vnp_TxnRef"] = order.PaymentRef
+            ["vnp_TxnRef"] = payment.PaymentRef
                 ?? throw new InvalidOperationException("PaymentRef is empty")
         };
 

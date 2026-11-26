@@ -4,6 +4,7 @@ WORKDIR /src
 COPY services/catalog-service/Catalog.Api.csproj services/catalog-service/
 RUN dotnet restore services/catalog-service/Catalog.Api.csproj
 
+COPY shared/Infrastructure/ shared/Infrastructure/
 COPY services/catalog-service/ services/catalog-service/
 
 RUN dotnet publish services/catalog-service/Catalog.Api.csproj \

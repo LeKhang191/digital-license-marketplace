@@ -6,6 +6,7 @@ COPY services/payment-service/Payment.Api.csproj services/payment-service/
 RUN dotnet restore services/payment-service/Payment.Api.csproj
 
 COPY shared/Contracts/ shared/Contracts/
+COPY shared/Infrastructure/ shared/Infrastructure/
 COPY services/payment-service/ services/payment-service/
 
 RUN dotnet publish services/payment-service/Payment.Api.csproj \

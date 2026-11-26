@@ -1,3 +1,4 @@
+using Marketplace.Shared.Security;
 using Microsoft.EntityFrameworkCore;
 using PaymentService.Infrastructure.Persistence;
 using PaymentService.Infrastructure.Messaging;
@@ -30,7 +31,7 @@ builder.Services.AddSingleton<InternalServiceAuth>();
 builder.Services.Configure<RabbitMqOptions>(
     builder.Configuration.GetSection("RabbitMq"));
 
-builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+builder.Services.AddSingleton<RabbitMqPublisher>();
 builder.Services.AddScoped<VnPayIpnHandler>();
 builder.Services.AddHostedService<OutboxWorker>();
 

@@ -72,7 +72,7 @@ builder.Services.AddHttpClient("SupportLicenses", client =>
 builder.Services.Configure<RabbitMqOptions>(
     builder.Configuration.GetSection("RabbitMq"));
 
-builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+builder.Services.AddSingleton<RabbitMqPublisher>();
 builder.Services.AddHostedService<OutboxWorker>();
 builder.Services.AddScoped<IOrderManager, OrderManager>();
 builder.Services.AddKeycloakAuth(builder.Configuration);

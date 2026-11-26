@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace LicenseVault.Api.Infrastructure.Security;
+namespace Marketplace.Shared.Security;
 
 public sealed class InternalServiceAuth
 {

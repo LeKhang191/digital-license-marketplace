@@ -1,3 +1,4 @@
+using Marketplace.Shared.Security;
 
 using LicenseVault.Api.Application.Interfaces;
 using LicenseVault.Api.Application.Services;
@@ -84,9 +85,7 @@ builder.Services.AddSingleton<InternalServiceAuth>();
 builder.Services.AddHostedService<OrderPaidConsumer>();
 
 // Allocation result publisher
-builder.Services.AddSingleton<
-    IEventPublisher,
-    RabbitMqPublisher>();
+builder.Services.AddSingleton<RabbitMqPublisher>();
 
 builder.Services.AddHostedService<AllocationOutboxWorker>();
 

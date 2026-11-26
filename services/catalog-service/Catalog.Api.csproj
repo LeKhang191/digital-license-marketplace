@@ -14,4 +14,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../shared/Infrastructure/Security/KeycloakAuthentication.cs" Link="Shared/Security/KeycloakAuthentication.cs" />
+  </ItemGroup>
+
 </Project>

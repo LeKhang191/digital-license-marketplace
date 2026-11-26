@@ -6,6 +6,7 @@ COPY services/order-service/Order.Api.csproj services/order-service/
 RUN dotnet restore services/order-service/Order.Api.csproj
 
 COPY shared/Contracts/ shared/Contracts/
+COPY shared/Infrastructure/ shared/Infrastructure/
 COPY services/order-service/ services/order-service/
 
 RUN dotnet publish services/order-service/Order.Api.csproj \

@@ -9,6 +9,7 @@ COPY services/license-vault-service/LicenseVault.Api.csproj services/license-vau
 RUN dotnet restore services/license-vault-service/LicenseVault.Api.csproj
 
 COPY shared/Contracts/ shared/Contracts/
+COPY shared/Infrastructure/ shared/Infrastructure/
 COPY services/license-vault-service/ services/license-vault-service/
 
 RUN dotnet publish services/license-vault-service/LicenseVault.Api.csproj \

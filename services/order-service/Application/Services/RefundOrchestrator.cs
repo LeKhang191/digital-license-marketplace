@@ -1,3 +1,4 @@
+using Marketplace.Shared.Messaging;
 using Contracts.Events;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +27,7 @@ public sealed class RefundOrchestrator(
     {
         operation.RetryCount++;
 
-        var delay = 1 << Math.Min(operation.RetryCount, 8);
+        var delay = RetryDelay.Seconds(operation.RetryCount);
 
         operation.NextRetryAtUtc =
             DateTime.UtcNow.AddSeconds(delay);

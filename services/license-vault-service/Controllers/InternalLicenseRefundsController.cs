@@ -1,3 +1,4 @@
+using Marketplace.Shared.Security;
 using Microsoft.AspNetCore.Mvc;
 using LicenseVault.Api.Application.Services;
 using LicenseVault.Api.Infrastructure.Security;

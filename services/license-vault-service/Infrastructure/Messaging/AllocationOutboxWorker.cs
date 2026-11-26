@@ -1,3 +1,4 @@
+using Marketplace.Shared.Messaging;
 using System.Text.Json;
 using Contracts.Events;
 using LicenseVault.Api.Domain.Entities;
@@ -8,50 +9,17 @@ namespace LicenseVault.Api.Infrastructure.Messaging;
 
 public sealed class AllocationOutboxWorker(
     IServiceScopeFactory scopeFactory,
-    IEventPublisher publisher,
+    RabbitMqPublisher publisher,
     ILogger<AllocationOutboxWorker> log
 ) : BackgroundService
 {
     private static readonly JsonSerializerOptions Json =
         new(JsonSerializerDefaults.Web);
 
-    protected override async Task ExecuteAsync(
+    protected override Task ExecuteAsync(
         CancellationToken stoppingToken)
-    {
-        log.LogInformation(
-            "Allocation Outbox Worker started");
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                var processed =
-                    await ProcessNextAsync(stoppingToken);
-
-                if (!processed)
-                {
-                    await Task.Delay(
-                        TimeSpan.FromSeconds(2),
-                        stoppingToken);
-                }
-            }
-            catch (OperationCanceledException)
-                when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                log.LogError(
-                    ex,
-                    "Allocation outbox processing failed");
-
-                await Task.Delay(
-                    TimeSpan.FromSeconds(5),
-                    stoppingToken);
-            }
-        }
-    }
+        => OutboxLoop.RunAsync(
+            ProcessNextAsync, log, stoppingToken);
 
     private async Task<bool> ProcessNextAsync(
         CancellationToken ct)
@@ -109,11 +77,7 @@ public sealed class AllocationOutboxWorker(
         {
             result.RetryCount++;
 
-            var delay = Math.Min(
-                300,
-                Math.Pow(
-                    2,
-                    Math.Min(result.RetryCount, 8)));
+            var delay = RetryDelay.Seconds(result.RetryCount);
 
             result.NextRetryAtUtc =
                 DateTime.UtcNow.AddSeconds(delay);

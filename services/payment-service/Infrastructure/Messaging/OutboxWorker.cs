@@ -1,3 +1,4 @@
+using Marketplace.Shared.Messaging;
 
 using System.Text.Json;
 using Contracts.Events;
@@ -9,49 +10,17 @@ namespace PaymentService.Infrastructure.Messaging;
 
 public sealed class OutboxWorker(
     IServiceScopeFactory scopeFactory,
-    IEventPublisher publisher,
+    RabbitMqPublisher publisher,
     ILogger<OutboxWorker> log
 ) : BackgroundService
 {
     private static readonly JsonSerializerOptions Json =
         new(JsonSerializerDefaults.Web);
 
-    protected override async Task ExecuteAsync(
+    protected override Task ExecuteAsync(
         CancellationToken stoppingToken)
-    {
-        log.LogInformation("Outbox Worker started");
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                var processed = await ProcessNextAsync(
-                    stoppingToken);
-
-                if (!processed)
-                {
-                    await Task.Delay(
-                        TimeSpan.FromSeconds(2),
-                        stoppingToken);
-                }
-            }
-            catch (OperationCanceledException)
-                when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                log.LogError(
-                    ex,
-                    "Outbox processing failed");
-
-                await Task.Delay(
-                    TimeSpan.FromSeconds(5),
-                    stoppingToken);
-            }
-        }
-    }
+        => OutboxLoop.RunAsync(
+            ProcessNextAsync, log, stoppingToken);
 
     private async Task<bool> ProcessNextAsync(
         CancellationToken ct)
@@ -109,11 +78,7 @@ public sealed class OutboxWorker(
         {
             message.RetryCount++;
 
-            var delay = Math.Min(
-                300,
-                Math.Pow(
-                    2,
-                    Math.Min(message.RetryCount, 8)));
+            var delay = RetryDelay.Seconds(message.RetryCount);
 
             message.NextRetryAtUtc =
                 DateTime.UtcNow.AddSeconds(delay);

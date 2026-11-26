@@ -24,4 +24,23 @@
     <ProjectReference Include="..\..\shared\Contracts\Contracts.csproj" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <Compile Include="../../shared/Infrastructure/Security/KeycloakAuthentication.cs" Link="Shared/Security/KeycloakAuthentication.cs" />
+    <Compile Include="../../shared/Infrastructure/Security/InternalServiceAuth.cs" Link="Shared/Security/InternalServiceAuth.cs" />
+    <Compile Include="../../shared/Infrastructure/Messaging/RabbitMqPublisher.cs" Link="Shared/Messaging/RabbitMqPublisher.cs" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);LICENSE_VAULT_SERVICE</DefineConstants>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <Compile Include="../../shared/Infrastructure/Messaging/OutboxLoop.cs"
+             Link="Shared/Messaging/OutboxLoop.cs" />
+    <Compile Include="../../shared/Infrastructure/Messaging/RetryDelay.cs"
+             Link="Shared/Messaging/RetryDelay.cs" />
+  </ItemGroup>
+
 </Project>

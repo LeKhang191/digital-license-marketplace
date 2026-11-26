@@ -1,3 +1,4 @@
+using Marketplace.Shared.Security;
 using Microsoft.AspNetCore.Mvc;
 using PaymentService.Application.Services;
 using PaymentService.Infrastructure.Security;

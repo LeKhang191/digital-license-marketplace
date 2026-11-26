@@ -3,17 +3,17 @@ using Contracts.Events;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 
+#if ORDER_SERVICE
+namespace OrderService.Infrastructure.Messaging;
+#elif PAYMENT_SERVICE
+namespace PaymentService.Infrastructure.Messaging;
+#elif LICENSE_VAULT_SERVICE
 namespace LicenseVault.Api.Infrastructure.Messaging;
-
-public interface IEventPublisher
-{
-    Task PublishAsync<T>(
-        string routingKey, T message, CancellationToken ct);
-}
+#endif
 
 public sealed class RabbitMqPublisher(
     IOptions<RabbitMqOptions> options
-) : IEventPublisher, IAsyncDisposable
+) : IAsyncDisposable
 {
     private static readonly JsonSerializerOptions Json =
         new(JsonSerializerDefaults.Web);

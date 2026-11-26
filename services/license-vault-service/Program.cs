@@ -34,6 +34,20 @@ builder.Services.AddHttpClient<
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 
+// Customer order verification
+builder.Services.AddHttpClient("LicenseOrders", client =>
+{
+    client.BaseAddress = new Uri(
+        (builder.Configuration["Services:OrderUrl"]
+        ?? "http://order:8080").TrimEnd('/') + "/");
+
+    client.Timeout = TimeSpan.FromSeconds(5);
+}).ConfigurePrimaryHttpMessageHandler(
+    () => new HttpClientHandler
+    {
+        AllowAutoRedirect = false
+    });
+
 // Encryption
 builder.Services.Configure<LicenseEncryptionOptions>(
     builder.Configuration.GetSection("LicenseEncryption"));

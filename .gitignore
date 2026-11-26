@@ -491,3 +491,14 @@ backups/
 
 # Compressed SQL backups (never commit)
 *.sql.gz
+
+# Local review artifacts
+.review-temp/
+phase58-source.zip
+*.patch
+__pycache__/
+*.pyc
+
+# Local backups
+.env.backup
+backups/

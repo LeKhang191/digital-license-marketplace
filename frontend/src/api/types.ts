@@ -84,3 +84,17 @@ export interface ImportLicensesResponse {
   duplicates: number;
   invalid: number;
 }
+
+export interface CustomerLicense {
+  id: string;
+  productId: string;
+  orderId: string;
+  orderItemId: string;
+  status: LicenseStatus;
+  assignedAtUtc: string;
+}
+
+export interface RevealLicenseResponse {
+  id: string;
+  licenseKey: string;
+}

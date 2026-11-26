@@ -67,3 +67,27 @@ export function disableLicense(id: string) {
     },
   );
 }
+
+export function listMyLicenses(orderId?: string) {
+  const query = orderId
+    ? `?orderId=${encodeURIComponent(orderId)}`
+    : "";
+
+  return api<import("./types").CustomerLicense[]>(
+    `/licenses/me${query}`,
+    {
+      auth: true,
+      cache: "no-store",
+    },
+  );
+}
+
+export function revealMyLicense(id: string) {
+  return api<import("./types").RevealLicenseResponse>(
+    `/licenses/me/${encodeURIComponent(id)}/reveal`,
+    {
+      auth: true,
+      cache: "no-store",
+    },
+  );
+}

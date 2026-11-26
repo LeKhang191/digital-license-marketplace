@@ -172,8 +172,23 @@ export function OrdersPage() {
               </button>
             )}
 
-            {/* TODO: Display license keys
-                when License Vault is ready */}
+            {o.status === "COMPLETED" && (
+              <p>
+                <Link
+                  className="btn"
+                  to={`/my-licenses?orderId=${o.id}`}
+                >
+                  Xem License Key
+                </Link>
+              </p>
+            )}
+
+            {o.status === "PAID" && (
+              <p className="muted">
+                Đã thanh toán. Đơn hàng đang được xử lý.
+                Vui lòng không thanh toán lại.
+              </p>
+            )}
           </div>
         ))}
       </div>

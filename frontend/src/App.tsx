@@ -1,3 +1,4 @@
+import { MyLicensesPage } from "./pages/MyLicensesPage";
 
 import { Route, Routes } from "react-router-dom";
 
@@ -35,6 +36,16 @@ export default function App() {
         />
 
         {/* Customer routes */}
+
+        <Route
+          path="/my-licenses"
+          element={
+            <RoleGuard allowedRoles={[Roles.CUSTOMER]}>
+              <MyLicensesPage />
+            </RoleGuard>
+          }
+        />
+
 
         <Route
           path="/orders"

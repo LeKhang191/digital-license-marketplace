@@ -39,9 +39,15 @@ export function Navbar() {
         {ready && authenticated && (
           <>
             {isCustomer && (
-              <Link to="/orders">
-                Đơn hàng của tôi
-              </Link>
+              <>
+                <Link to="/orders">
+                  Đơn hàng của tôi
+                </Link>
+
+                <Link to="/my-licenses">
+                  License của tôi
+                </Link>
+              </>
             )}
 
             {isCatalogManager && (

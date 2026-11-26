@@ -19,7 +19,7 @@ public sealed class ProductUpsertRequest
     [Required, StringLength(80, MinimumLength = 2)]
     public string Category { get; set; } = "";
 
-    [Range(typeof(decimal), "0", "9999999999.99")]
+    [Range(typeof(decimal), "5000", "9999999999")]
     public decimal Price { get; set; }
 
     public bool IsActive { get; set; } = true;

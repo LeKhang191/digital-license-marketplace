@@ -26,7 +26,7 @@ builder.Services.AddHttpClient<SteamMetadataProvider>(client =>
     client.BaseAddress = new Uri("https://store.steampowered.com/");
     client.Timeout = TimeSpan.FromSeconds(15);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-builder.Services.AddKeycloakAuth(builder.Configuration);
+builder.Services.AddKeycloakAuth(builder.Configuration, builder.Environment);
 
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();

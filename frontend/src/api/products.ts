@@ -1,8 +1,8 @@
 import { api } from "./client";
 import type { PagedProducts, Product } from "./types";
 
-export function listProducts(params: { search?: string; category?: string; page?: number }) {
-  const q = new URLSearchParams({ pageSize: "12" });
+export function listProducts(params: { search?: string; category?: string; page?: number; pageSize?: number }) {
+  const q = new URLSearchParams({ pageSize: String(params.pageSize ?? 12) });
   if (params.search) q.set("search", params.search);
   if (params.category) q.set("category", params.category);
   if (params.page) q.set("page", String(params.page));

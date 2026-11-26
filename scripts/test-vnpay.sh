@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# Mô phỏng VNPay gọi IPN (có ký HMAC-SHA512 bằng HashSecret trong .env)
-# và kiểm tra: trạng thái đơn, chống gọi trùng, chữ ký sai, sự kiện RabbitMQ.
 set -euo pipefail
-# Credentials are supplied at runtime; never embed demo passwords in Git.
 : "${TEST_ADMIN_USER:?Set TEST_ADMIN_USER}"
 : "${TEST_ADMIN_PASSWORD:?Set TEST_ADMIN_PASSWORD}"
 : "${TEST_CUSTOMER_USER:?Set TEST_CUSTOMER_USER}"
@@ -22,16 +19,15 @@ token() { curl -s -X POST "$KC" -d "client_id=marketplace-web&grant_type=passwor
 first_id() { grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4; }
 
 ADMIN=$(token "$TEST_ADMIN_USER" "$TEST_ADMIN_PASSWORD"); CUST=$(token "$TEST_CUSTOMER_USER" "$TEST_CUSTOMER_PASSWORD")
-[ ${#ADMIN} -gt 100 ] || { echo "Không lấy được token. Kiểm tra Keycloak."; exit 1; }
+[ ${#ADMIN} -gt 100 ] || { echo "Không lấy được token admin. Kiểm tra TEST_ADMIN_USER/TEST_ADMIN_PASSWORD và Keycloak."; exit 1; }
+[ ${#CUST} -gt 100 ] || { echo "Không lấy được token customer. Kiểm tra TEST_CUSTOMER_USER/TEST_CUSTOMER_PASSWORD và Keycloak."; exit 1; }
 
-# Hàng đợi tạm để đọc sự kiện order.paid
 mg() { curl -s -u "$RU:$RP" -H "$json" "$@"; }
 mg -X PUT $MG/exchanges/%2F/marketplace.events -d '{"type":"topic","durable":true}' >/dev/null
 mg -X PUT $MG/queues/%2F/test.order.paid -d '{"durable":false}' >/dev/null
 mg -X DELETE $MG/queues/%2F/test.order.paid/contents >/dev/null
 mg -X POST $MG/bindings/%2F/e/marketplace.events/q/test.order.paid -d '{"routing_key":"order.paid"}' >/dev/null
 
-# Sản phẩm 250000 VND + đơn của customer
 PID=$(curl -s -X POST $GW/catalog/products -H "Authorization: Bearer $ADMIN" -H "$json" \
   -d "{\"name\":\"Pay Test $RANDOM\",\"slug\":\"p-$RANDOM-$RANDOM\",\"category\":\"Game\",\"price\":250000}" | first_id)
 RES=$(curl -s -X POST $GW/orders -H "Authorization: Bearer $CUST" -H "$json" -d "{\"productId\":\"$PID\",\"quantity\":1}")
@@ -44,7 +40,6 @@ echo "Link thanh toán (mở bằng trình duyệt để thử thanh toán thậ
 echo "  [redacted: paymentUrl saved only in local process]"
 echo
 
-# Dựng IPN giả có chữ ký (các khóa đã xếp theo thứ tự chữ cái)
 AMOUNT=25000000
 mkqs() { echo "vnp_Amount=$1&vnp_BankCode=NCB&vnp_CardType=ATM&vnp_OrderInfo=ThanhToanDonHang&vnp_PayDate=20261122120000&vnp_ResponseCode=$2&vnp_TmnCode=$TMN&vnp_TransactionNo=14123456&vnp_TransactionStatus=$2&vnp_TxnRef=$REF"; }
 sign() { printf %s "$1" | openssl dgst -sha512 -hmac "$SECRET" | awk '{print $NF}'; }
@@ -52,10 +47,18 @@ ipn() { curl -s "$GW/orders/vnpay-ipn?$1&vnp_SecureHash=$2"; }
 
 QS=$(mkqs $AMOUNT 00); H=$(sign "$QS")
 BAD=$(mkqs 1 00)
+WRONG_TMN=$(echo "$QS" | sed "s/vnp_TmnCode=$TMN/vnp_TmnCode=WRONG123/"); WRONG_TMN_H=$(sign "$WRONG_TMN")
 echo "IPN sai chữ ký        (mong đợi 97): $(ipn "$BAD" "$H")"
+echo "IPN sai TmnCode       (mong đợi 99): $(ipn "$WRONG_TMN" "$WRONG_TMN_H")"
 echo "IPN đúng              (mong đợi 00): $(ipn "$QS" "$H")"
 echo "IPN gọi lại           (mong đợi 02): $(ipn "$QS" "$H")"
 echo "Trạng thái đơn        (mong đợi PAID): $(curl -s $GW/orders/$OID -H "Authorization: Bearer $CUST" | grep -o '"status":"[^"]*"')"
 echo
-echo "Sự kiện order.paid trong RabbitMQ (mong đợi 1 tin nhắn):"
-mg -X POST $MG/queues/%2F/test.order.paid/get -d '{"count":5,"ackmode":"ack_requeue_false","encoding":"auto"}' | grep -o '"payload":"[^}]*' | head -3
+echo "Sự kiện order.paid trong RabbitMQ (chờ tối đa 15s theo chu kỳ PaidOrderDispatchWorker):"
+MSG=""
+for _ in $(seq 1 15); do
+  MSG=$(mg -X POST $MG/queues/%2F/test.order.paid/get -d '{"count":5,"ackmode":"ack_requeue_false","encoding":"auto"}' | grep -o '"payload":"[^}]*' | head -3 || true)
+  [ -n "$MSG" ] && break
+  sleep 1
+done
+echo "${MSG:-<không nhận được tin nhắn sau 15s>}"

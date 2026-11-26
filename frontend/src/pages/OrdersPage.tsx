@@ -58,6 +58,20 @@ function OrderList() {
             {o.status === "PENDING" && (
               <p className="muted">Đang chờ đối soát. Nếu đã thanh toán, không chuyển tiền lần nữa. Liên hệ hỗ trợ nếu cần kiểm tra giao dịch.</p>
             )}
+            {o.status === "PAID" && (
+              <p className="muted">Đã nhận thanh toán. Hệ thống đang trích xuất mã kích hoạt; bấm Làm mới đơn hàng sau vài giây.</p>
+            )}
+            {o.status === "REFUNDING" && (
+              <div className="alert" style={{ marginTop: 12 }}>
+                Kho tạm hết key cho đơn này. Yêu cầu hoàn tiền đang được xử lý.
+              </div>
+            )}
+            {o.status === "REFUNDED" && (
+              <p className="muted">Đơn hàng đã được hoàn tiền về phương thức thanh toán ban đầu.</p>
+            )}
+            {o.status === "CANCELED" && (
+              <p className="muted">Đơn hàng đã bị hủy do giao dịch không hoàn tất.</p>
+            )}
             {o.status === "COMPLETED" && <OrderKeys key={`${subject}:${o.id}`} orderId={o.id} />}
           </div>
         ))}

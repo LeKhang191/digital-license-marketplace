@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
@@ -38,11 +37,16 @@ RABBITMQ_USER=marketplace
 RABBITMQ_PASSWORD=$(openssl rand -hex 20)
 KC_PASSWORD=$(openssl rand -hex 20)
 KEYCLOAK_VERSION=26.8.2
+LICENSE_VAULT_KEY=$(openssl rand -base64 32)
+VNPAY_RETURN_URL=http://localhost:5173/payment/result
 EOF
 
     echo ".env created successfully."
 else
     echo ".env already exists. Keeping existing configuration."
+    if ! grep -qE '^LICENSE_VAULT_KEY=.+' .env; then
+        echo "WARNING: LICENSE_VAULT_KEY is missing in .env; generate one with: openssl rand -base64 32"
+    fi
 fi
 
 # Kiểm tra Docker Compose

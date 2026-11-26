@@ -12,11 +12,17 @@ public sealed class VnPayService(IOptions<VnPayOptions> options)
     private VnPayOptions O => options.Value;
 
     public bool IsConfigured =>
-    !string.IsNullOrWhiteSpace(O.TmnCode) &&
-    !string.IsNullOrWhiteSpace(O.HashSecret) &&
-    Uri.TryCreate(O.PayUrl, UriKind.Absolute, out var uri) &&
-    uri.Scheme == Uri.UriSchemeHttps &&
-    !string.IsNullOrWhiteSpace(O.ReturnUrl);
+        !string.IsNullOrWhiteSpace(O.TmnCode) &&
+        !O.TmnCode.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(O.HashSecret) &&
+        !O.HashSecret.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) &&
+        Uri.TryCreate(O.PayUrl, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        !string.IsNullOrWhiteSpace(O.ReturnUrl);
+
+    public bool MatchesTmnCode(string tmnCode) =>
+        !string.IsNullOrWhiteSpace(O.TmnCode) &&
+        string.Equals(O.TmnCode, tmnCode, StringComparison.Ordinal);
 
     public static long ToVnpAmount(decimal total) =>
         (long)Math.Round(total, 0, MidpointRounding.AwayFromZero) * 100;

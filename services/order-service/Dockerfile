@@ -8,6 +8,10 @@ RUN dotnet restore services/order-service/Order.Api.csproj
 COPY shared/Contracts/ shared/Contracts/
 COPY services/order-service/ services/order-service/
 
+RUN find /src/services/order-service /src/shared/Contracts -type d \
+    \( -name 'bin?Debug' -o -name 'bin?Release' \) \
+    -prune -print -exec rm -rf {} +
+
 RUN dotnet publish services/order-service/Order.Api.csproj \
     -c Release -o /app/publish --no-restore
 

@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { OrderKeys } from "../components/OrderKeys";
 import { StatusBadge } from "../components/StatusBadge";
 import { vnd } from "../components/format";
-import { isFinalStatus, nextPollDelayMs } from "./paymentPolling";
+import { nextPollDelayMs, shouldMarkGaveUp } from "./paymentPolling";
 
 export function PaymentResultPage() {
   const [params] = useSearchParams();
@@ -45,9 +45,9 @@ export function PaymentResultPage() {
         if (stop) return;
         attempt += 1;
         setOrder(o);
-        const delay = nextPollDelayMs(o.status, attempt);
+        const delay = nextPollDelayMs(o.status, attempt, responseCode);
         if (delay !== null) timer = setTimeout(poll, delay);
-        else if (!isFinalStatus(o.status)) setGaveUp(true);
+        else if (shouldMarkGaveUp(o.status, responseCode)) setGaveUp(true);
       } catch (e) {
         if (!stop) setError((e as Error).message);
       }
@@ -57,7 +57,7 @@ export function PaymentResultPage() {
       stop = true;
       clearTimeout(timer);
     };
-  }, [ready, authenticated, orderId, pollRun]);
+  }, [ready, authenticated, orderId, responseCode, pollRun]);
 
   if (!orderId)
     return (

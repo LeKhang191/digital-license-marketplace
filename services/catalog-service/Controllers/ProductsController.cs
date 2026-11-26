@@ -45,6 +45,9 @@ public sealed class ProductsController(
         [FromBody] ProductUpsertRequest request,
         CancellationToken ct)
     {
+        if (decimal.Truncate(request.Price) != request.Price)
+            return BadRequest(new { error = "Price must be whole VND." });
+
         var result = await products.CreateAsync(request, ct);
 
         if (result.conflict)
@@ -64,6 +67,9 @@ public sealed class ProductsController(
         [FromBody] ProductUpsertRequest request,
         CancellationToken ct)
     {
+        if (decimal.Truncate(request.Price) != request.Price)
+            return BadRequest(new { error = "Price must be whole VND." });
+
         var result = await products.UpdateAsync(
             id, request, ct);
 

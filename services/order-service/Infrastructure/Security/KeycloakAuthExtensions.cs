@@ -9,7 +9,8 @@ public static class KeycloakAuthExtensions
 {
     public static IServiceCollection AddKeycloakAuth(
         this IServiceCollection services,
-        IConfiguration config)
+        IConfiguration config,
+        IHostEnvironment env)
     {
         var metadata = config["Keycloak:MetadataAddress"]
             ?? throw new InvalidOperationException(
@@ -19,19 +20,24 @@ public static class KeycloakAuthExtensions
             ?? throw new InvalidOperationException(
                 "Keycloak:Issuer is missing");
 
+        var requireHttps = config.GetValue("Keycloak:RequireHttpsMetadata", !env.IsDevelopment());
+        var audience = config["Keycloak:Audience"];
+        var allowedClient = config["Keycloak:AllowedClientId"] ?? "marketplace-web";
+
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 options.MetadataAddress = metadata;
-                options.RequireHttpsMetadata = false;
+                options.RequireHttpsMetadata = requireHttps;
                 options.MapInboundClaims = false;
 
                 options.TokenValidationParameters =
                     new TokenValidationParameters
                     {
                         ValidIssuer = issuer,
-                        ValidateAudience = false,
+                        ValidateAudience = !string.IsNullOrWhiteSpace(audience),
+                        ValidAudience = audience,
                         NameClaimType = "preferred_username",
                         RoleClaimType = ClaimTypes.Role
                     };
@@ -40,6 +46,12 @@ public static class KeycloakAuthExtensions
                 {
                     OnTokenValidated = ctx =>
                     {
+                        if (!string.IsNullOrWhiteSpace(allowedClient) &&
+                            !string.Equals(ctx.Principal?.FindFirst("azp")?.Value, allowedClient, StringComparison.Ordinal))
+                        {
+                            ctx.Fail("Invalid authorized party");
+                            return Task.CompletedTask;
+                        }
                         AddRealmRoles(ctx.Principal);
                         return Task.CompletedTask;
                     }

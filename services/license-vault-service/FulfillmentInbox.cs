@@ -5,7 +5,7 @@ using Npgsql;
 
 // Durable inbox: persist before acknowledging the broker. Delayed jobs and
 // dead letters live in PostgreSQL, not at the head of the RabbitMQ queue.
-public sealed class FulfillmentInbox(NpgsqlDataSource source)
+public sealed class FulfillmentInbox(NpgsqlDataSource source, int maxAttempts = 20, int retryDelaySeconds = 60)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public async Task InitializeAsync()
@@ -19,8 +19,12 @@ public sealed class FulfillmentInbox(NpgsqlDataSource source)
               last_error text, created_at timestamptz NOT NULL DEFAULT now(),
               updated_at timestamptz NOT NULL DEFAULT now()
             );
+            ALTER TABLE vault_paid_inbox ADD COLUMN IF NOT EXISTS missing_product_id uuid;
+            ALTER TABLE vault_paid_inbox ADD COLUMN IF NOT EXISTS out_of_stock_sent_at timestamptz;
             CREATE INDEX IF NOT EXISTS ix_vault_paid_inbox_due
               ON vault_paid_inbox(next_attempt_at,order_id) WHERE status='PENDING';
+            CREATE INDEX IF NOT EXISTS ix_vault_paid_inbox_out_of_stock
+              ON vault_paid_inbox(updated_at,order_id) WHERE status='DEAD' AND last_error='INSUFFICIENT_STOCK' AND out_of_stock_sent_at IS NULL;
             CREATE TABLE IF NOT EXISTS vault_paid_rejected (
               fingerprint text PRIMARY KEY, reason text NOT NULL,
               created_at timestamptz NOT NULL DEFAULT now()
@@ -91,13 +95,19 @@ public sealed class FulfillmentInbox(NpgsqlDataSource source)
         var evt = Parse(System.Text.Encoding.UTF8.GetBytes(payload));
         var done = false;
         string? reason = null;
+        Guid? missingProductId = null;
         if (evt is null || evt.OrderId != id) reason = "INVALID_PAYLOAD";
         else
         {
             try
             {
-                done = await store.AllocateAsync(evt, ct) == true;
-                if (!done) reason = "INSUFFICIENT_STOCK";
+                var (allocated, missingProduct) = await store.AllocateAsync(evt, ct);
+                done = allocated;
+                if (!done)
+                {
+                    reason = "INSUFFICIENT_STOCK";
+                    missingProductId = missingProduct ?? evt.Items[0].ProductId;
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
@@ -108,15 +118,20 @@ public sealed class FulfillmentInbox(NpgsqlDataSource source)
         }
         // The allocation transaction commits independently. If the process dies
         // here, AllocateAsync's existing order-id idempotency makes retry safe.
-        var status = done ? "DONE" : attempts + 1 >= 20 || reason == "INVALID_PAYLOAD" ? "DEAD" : "PENDING";
+        var effectiveMaxAttempts = Math.Max(1, maxAttempts);
+        var effectiveRetryDelay = Math.Max(5, retryDelaySeconds);
+        var status = done ? "DONE" : attempts + 1 >= effectiveMaxAttempts || reason == "INVALID_PAYLOAD" ? "DEAD" : "PENDING";
         await using (var cmd = new NpgsqlCommand("""
             UPDATE vault_paid_inbox SET status=@status, attempts=attempts+1,
-              next_attempt_at=now()+interval '60 seconds', last_error=@reason,
+              next_attempt_at=now()+make_interval(secs => @delay), last_error=@reason,
+              missing_product_id=@missingProduct,
               updated_at=now() WHERE order_id=@id
             """, conn, tx))
         {
             cmd.Parameters.AddWithValue("status", status);
+            cmd.Parameters.AddWithValue("delay", effectiveRetryDelay);
             cmd.Parameters.AddWithValue("reason", NpgsqlTypes.NpgsqlDbType.Text, (object?)reason ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("missingProduct", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)missingProductId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("id", id);
             await cmd.ExecuteNonQueryAsync(ct);
         }
@@ -124,6 +139,38 @@ public sealed class FulfillmentInbox(NpgsqlDataSource source)
         if (done) log.LogInformation("Keys allocated for order {OrderId}", id);
         else log.LogWarning("Fulfillment {OrderId}: {Status}, {Reason}, attempt {Attempt}", id, status, reason, attempts + 1);
         return true;
+    }
+
+    public async Task<List<KeyOutOfStockEvent>> PendingOutOfStockAsync(CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("""
+            SELECT order_id, missing_product_id, last_error
+            FROM vault_paid_inbox
+            WHERE status='DEAD' AND last_error='INSUFFICIENT_STOCK' AND out_of_stock_sent_at IS NULL
+            ORDER BY updated_at, order_id
+            LIMIT 100
+            """);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var list = new List<KeyOutOfStockEvent>();
+        while (await reader.ReadAsync(ct))
+        {
+            var orderId = reader.GetGuid(0);
+            var productId = reader.IsDBNull(1) ? Guid.Empty : reader.GetGuid(1);
+            var reason = reader.IsDBNull(2) ? "INSUFFICIENT_STOCK" : reader.GetString(2);
+            list.Add(new KeyOutOfStockEvent(orderId, productId, reason));
+        }
+        return list;
+    }
+
+    public async Task MarkOutOfStockSentAsync(Guid orderId, CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("""
+            UPDATE vault_paid_inbox
+            SET out_of_stock_sent_at=now(), updated_at=now()
+            WHERE order_id=@id AND out_of_stock_sent_at IS NULL
+            """);
+        cmd.Parameters.AddWithValue("id", orderId);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 }
 

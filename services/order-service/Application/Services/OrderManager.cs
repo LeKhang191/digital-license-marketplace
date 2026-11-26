@@ -1,7 +1,9 @@
+using Contracts.Events;
 using Microsoft.EntityFrameworkCore;
 using OrderService.Application.DTOs;
 using OrderService.Domain.Entities;
 using OrderService.Infrastructure.Catalog;
+using OrderService.Infrastructure.Messaging;
 using OrderService.Infrastructure.Persistence;
 using OrderService.Infrastructure.VnPay;
 
@@ -12,6 +14,8 @@ public static class OrderErrors
     public const string ProductNotFound = "Product not found";
     public const string OrderNotFound = "Order not found";
     public const string NotPayable = "Order is not payable";
+    public const string NotRefundable = "Order is not in REFUNDING status";
+    public const string InvalidAmount = "Order total must be a whole VND amount of at least 5,000 VND";
     public const string PaymentReconciliationRequired = "Payment link cannot be reissued until the original transaction is reconciled. Check your order or contact support.";
     public const string PaymentNotConfigured = "PAYMENT_NOT_CONFIGURED";
 }
@@ -30,14 +34,22 @@ public interface IOrderManager
 
     Task<OrderResponse?> GetAsync(
         string userId, Guid id, CancellationToken ct);
+
+    Task<IReadOnlyList<OrderResponse>> ListRefundsAsync(CancellationToken ct);
+
+    Task<(OrderResponse? Order, string? Error)> CompleteRefundAsync(Guid id, CancellationToken ct);
 }
 
 public sealed class OrderManager(
     OrderDbContext db,
     ICatalogClient catalog,
-    VnPayService vnpay
+    VnPayService vnpay,
+    IEventPublisher publisher,
+    ILogger<OrderManager> log
 ) : IOrderManager
 {
+    private const decimal MinVnPayAmountVnd = 5000m;
+
     private static string NewPaymentRef(Guid orderId) =>
         orderId.ToString("N") + DateTime.UtcNow.ToString("yyMMddHHmmss");
 
@@ -53,12 +65,16 @@ public sealed class OrderManager(
         if (product is null || !product.IsActive)
             return (null, OrderErrors.ProductNotFound);
 
+        var totalAmount = product.Price * request.Quantity;
+        if (totalAmount < MinVnPayAmountVnd || decimal.Truncate(totalAmount) != totalAmount)
+            return (null, OrderErrors.InvalidAmount);
+
         var order = new Order
         {
             KeycloakUserId = userId,
             CustomerEmail = email,
             Status = OrderStatus.Pending,
-            TotalAmount = product.Price * request.Quantity
+            TotalAmount = totalAmount
         };
         order.PaymentRef = NewPaymentRef(order.Id);
 
@@ -122,5 +138,59 @@ public sealed class OrderManager(
                 o => o.Id == id && o.KeycloakUserId == userId, ct);
 
         return order is null ? null : OrderResponse.From(order);
+    }
+
+    public async Task<IReadOnlyList<OrderResponse>> ListRefundsAsync(CancellationToken ct)
+    {
+        var orders = await db.Orders
+            .AsNoTracking()
+            .Include(o => o.Items)
+            .Where(o => o.Status == OrderStatus.Refunding || o.Status == OrderStatus.Refunded)
+            .OrderByDescending(o => o.CreatedAtUtc)
+            .Take(200)
+            .ToListAsync(ct);
+
+        return orders.Select(OrderResponse.From).ToList();
+    }
+
+    public async Task<(OrderResponse? Order, string? Error)> CompleteRefundAsync(Guid id, CancellationToken ct)
+    {
+        var order = await db.Orders
+            .AsNoTracking()
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == id, ct);
+
+        if (order is null) return (null, OrderErrors.OrderNotFound);
+        if (order.Status == OrderStatus.Refunded) return (OrderResponse.From(order), null);
+        if (order.Status != OrderStatus.Refunding) return (null, OrderErrors.NotRefundable);
+
+        var rows = await db.Orders
+            .Where(o => o.Id == id && o.Status == OrderStatus.Refunding)
+            .ExecuteUpdateAsync(s => s.SetProperty(o => o.Status, OrderStatus.Refunded), ct);
+
+        if (rows == 0)
+        {
+            var latest = await db.Orders.AsNoTracking().Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id, ct);
+            return latest?.Status == OrderStatus.Refunded
+                ? (OrderResponse.From(latest), null)
+                : (null, OrderErrors.NotRefundable);
+        }
+
+        order.Status = OrderStatus.Refunded;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            await publisher.PublishAsync(
+                EventRoutes.OrderRefunded,
+                new OrderRefundedEvent(order.Id, order.KeycloakUserId, order.CustomerEmail, order.TotalAmount),
+                timeout.Token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            log.LogWarning(ex, "Order {OrderId} refunded in DB, but failed to publish order.refunded notification", order.Id);
+        }
+
+        return (OrderResponse.From(order), null);
     }
 }

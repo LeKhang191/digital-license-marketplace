@@ -19,7 +19,8 @@ h1 { font-size: 28px; margin: 0 0 calc(var(--space) * 2); }
 h2 { font-size: 20px; margin: 0 0 var(--space); }
 
 .card {
-  background: var(--color-surface);
+  background: #222326d9;
+  backdrop-filter: blur(12px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: calc(var(--space) * 2);
@@ -32,33 +33,31 @@ h2 { font-size: 20px; margin: 0 0 var(--space); }
   border-radius: 8px;
   padding: calc(var(--space) * 1.25) calc(var(--space) * 2.5);
   background: var(--color-primary);
-  color: #fff;
+  color: #171719;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 .btn:hover { background: var(--color-primary-hover); text-decoration: none; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary { background: transparent; color: var(--color-primary); border: 1px solid var(--color-primary); }
-.btn-secondary:hover { background: #e0f2fe; }
+.btn-secondary { background: transparent; color: #eee; border: 1px solid #ffffff30; }
+.btn-secondary:hover { background: #ffffff18; }
 
-input, select {
+input, select, textarea {
   font: inherit;
   padding: var(--space) calc(var(--space) * 1.5);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fff;
+  background: #18191b;
+  color: var(--color-text);
 }
 
-.navbar { background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
-.navbar .container { display: flex; align-items: center; gap: calc(var(--space) * 3); padding-top: calc(var(--space) * 1.5); padding-bottom: calc(var(--space) * 1.5); }
-.navbar .brand { font-weight: 700; font-size: 18px; color: var(--color-text); }
 .spacer { flex: 1; }
 
 .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; }
-.alert { padding: calc(var(--space) * 1.5) calc(var(--space) * 2); border-radius: 8px; background: #fee2e2; color: var(--color-danger); }
+.alert { padding: calc(var(--space) * 1.5) calc(var(--space) * 2); border-radius: 8px; background: #541e2a; color: #fecdd3; }
 .price { font-weight: 700; color: var(--color-accent); }
-.thumb { height: 120px; border-radius: 8px; background: linear-gradient(135deg, #e0f2fe, #cbd5e1); display: grid; place-items: center; font-weight: 700; color: var(--color-primary); font-size: 28px; margin-bottom: var(--space); }
+.thumb { height: 120px; border-radius: 8px; background: #333; display: grid; place-items: center; font-weight: 700; color: var(--color-primary); font-size: 28px; margin-bottom: var(--space); }
 
 /* Dark glass storefront — original branding, reference-inspired layout. */
 body { min-height:100vh; isolation:isolate; }
@@ -67,7 +66,7 @@ body::before { content:""; position:fixed; z-index:-1; inset:-25%; pointer-event
 @keyframes arrive { from {opacity:0;transform:translateY(9px)} to {opacity:1;transform:translateY(0)} }
 .navbar { position:sticky; top:0; z-index:20; background:#171719a8; backdrop-filter:blur(18px); border-bottom:1px solid #ffffff0b; }
 .nav-inner { max-width:1800px; margin:auto; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:13px 24px; flex-wrap:wrap; }
-.brand {display:flex; align-items:center; gap:9px; white-space:nowrap; letter-spacing:.04em; }
+.brand {display:flex; align-items:center; gap:9px; white-space:nowrap; letter-spacing:.04em; font-weight:700; font-size:18px; color:var(--color-text); }
 .brand-mark {display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:2px solid #eee;background:#e5e5e5;color:#171719; font-weight:900; }
 .nav-tabs,.nav-actions {display:flex;align-items:center;gap:7px;flex-wrap:wrap; }
 .nav-tabs {background:#0d0d0e75;padding:4px;border-radius:40px; }
@@ -75,8 +74,6 @@ body::before { content:""; position:fixed; z-index:-1; inset:-25%; pointer-event
 .nav-tabs a.active,.nav-tabs a:hover {background:#eee;color:#171719;text-decoration:none;}
 .pill {background:#ffffff0c;} .pill:hover {background:#ffffff25;text-decoration:none;} .pill.faq {color:#d8a1ff;background:#a64be52b;} .pill.guide {color:#69e6f5;background:#00b9d52a;} .pill.guide:hover {background:#18d6e8;color:#10252a;box-shadow:0 0 22px #00cde866;}
 .nav-search input {width:150px;background:#101012aa;border-color:#ffffff0d;border-radius:30px;font-size:12px;padding:8px 12px;}
-input,select {background:#18191b;color:var(--color-text);border-color:var(--color-border);}
-.btn {color:#171719;} .btn-secondary {color:#eee;border-color:#ffffff30;} .btn-secondary:hover {background:#ffffff18;} .alert {background:#541e2a;color:#fecdd3;} .card {background:#222326d9;backdrop-filter:blur(12px);} .thumb {background:#333;}
 .storefront {max-width:1480px;margin:auto;padding:28px 24px 72px;animation:arrive .35s ease both;}
 .section-heading {font-size:17px;letter-spacing:.045em;text-transform:uppercase;border-left:3px solid #e5e5e5;padding-left:9px;margin:0 0 18px;line-height:1.25;}
 .featured-section {margin:0 auto 34px;} .featured-section .section-heading {max-width:1050px;margin:0 auto 18px;}

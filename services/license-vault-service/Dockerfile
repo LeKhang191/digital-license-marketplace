@@ -8,6 +8,10 @@ RUN dotnet restore services/license-vault-service/LicenseVault.Api.csproj
 COPY shared/Contracts/ shared/Contracts/
 COPY services/license-vault-service/ services/license-vault-service/
 
+RUN find /src/services/license-vault-service /src/shared/Contracts -type d \
+    \( -name 'bin?Debug' -o -name 'bin?Release' \) \
+    -prune -print -exec rm -rf {} +
+
 RUN dotnet publish services/license-vault-service/LicenseVault.Api.csproj \
     -c Release -o /app/publish --no-restore
 

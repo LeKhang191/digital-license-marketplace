@@ -15,10 +15,11 @@ first_id() { grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4; }
 json="Content-Type: application/json"
 
 ADMIN=$(token "$TEST_ADMIN_USER" "$TEST_ADMIN_PASSWORD"); CUST=$(token "$TEST_CUSTOMER_USER" "$TEST_CUSTOMER_PASSWORD")
-[ ${#ADMIN} -gt 100 ] || { echo "Không lấy được token. Kiểm tra Keycloak."; exit 1; }
+[ ${#ADMIN} -gt 100 ] || { echo "Không lấy được token admin. Kiểm tra TEST_ADMIN_USER/TEST_ADMIN_PASSWORD và Keycloak."; exit 1; }
+[ ${#CUST} -gt 100 ] || { echo "Không lấy được token customer. Kiểm tra TEST_CUSTOMER_USER/TEST_CUSTOMER_PASSWORD và Keycloak."; exit 1; }
 
 PID=$(curl -s -X POST $GW/catalog/products -H "Authorization: Bearer $ADMIN" -H "$json" \
-  -d "{\"name\":\"Order Test $RANDOM\",\"slug\":\"o-$RANDOM-$RANDOM\",\"category\":\"Game\",\"price\":25.5}" | first_id)
+  -d "{\"name\":\"Order Test $RANDOM\",\"slug\":\"o-$RANDOM-$RANDOM\",\"category\":\"Game\",\"price\":25000}" | first_id)
 echo "Sản phẩm test: $PID"
 
 code() { curl -s -o /dev/null -w "%{http_code}" "$@"; }
@@ -27,7 +28,7 @@ echo "POST single with invalid product (400):        $(code -X POST $GW/orders -
 
 RES=$(curl -s -X POST $GW/orders -H "Authorization: Bearer $CUST" -H "$json" -d "{\"productId\":\"$PID\",\"quantity\":2}")
 OID=$(echo "$RES" | first_id)
-echo "POST single with 2 items (at 51, PENDING):"; echo "  $RES"
+echo "POST single with 2 items (at 50000, PENDING):"; echo "  $RES"
 echo "GET /orders of customer (200):    $(code $GW/orders -H "Authorization: Bearer $CUST")"
 echo "GET single of urself (200):      $(code $GW/orders/$OID -H "Authorization: Bearer $CUST")"
 echo "GET single from others - admin (404):  $(code $GW/orders/$OID -H "Authorization: Bearer $ADMIN")"

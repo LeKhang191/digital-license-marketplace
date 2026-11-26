@@ -17,7 +17,14 @@ export function ProductPage() {
 
   useEffect(() => {
     if (!id) return;
-    getProduct(id).then(setProduct).catch((e: Error) => setError(e.message));
+    let active = true;
+    setProduct(null);
+    setError(null);
+    setQuantity(1);
+    getProduct(id)
+      .then((p) => { if (active) setProduct(p); })
+      .catch((e: Error) => { if (active) setError(e.message); });
+    return () => { active = false; };
   }, [id]);
 
   async function buy() {

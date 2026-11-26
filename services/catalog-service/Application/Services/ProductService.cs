@@ -24,10 +24,13 @@ public sealed class ProductService(
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = search.Trim();
+            var term = search.Trim()
+                .Replace(@"\", @"\\")
+                .Replace("%", @"\%")
+                .Replace("_", @"\_");
 
             query = query.Where(p =>
-                EF.Functions.ILike(p.Name, $"%{term}%"));
+                EF.Functions.ILike(p.Name, $"%{term}%", @"\"));
         }
 
         if (!string.IsNullOrWhiteSpace(category))

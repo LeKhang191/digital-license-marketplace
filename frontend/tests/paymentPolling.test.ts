@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   nextPollDelayMs,
   isFinalStatus,
+  shouldMarkGaveUp,
   POLL_INTERVAL_MS,
   MAX_POLL_ATTEMPTS,
 } from "../src/pages/paymentPolling.ts";
@@ -29,4 +30,14 @@ test("đơn kẹt ở PAID không poll vô hạn: dừng sau MAX_POLL_ATTEMPTS",
 
 test("tổng thời gian poll tối đa là 60 giây", () => {
   assert.equal(POLL_INTERVAL_MS * MAX_POLL_ATTEMPTS, 60_000);
+});
+
+test("PENDING kèm mã hủy (24) hoặc mã lỗi VNPay dừng poll ngay và không bật gaveUp", () => {
+  for (const code of ["24", "51", "99"]) {
+    assert.equal(nextPollDelayMs("PENDING", 1, code), null);
+    assert.equal(shouldMarkGaveUp("PENDING", code), false);
+  }
+  assert.equal(nextPollDelayMs("PENDING", 1, "00"), POLL_INTERVAL_MS);
+  assert.equal(shouldMarkGaveUp("PENDING", "00"), true);
+  assert.equal(nextPollDelayMs("PAID", 1, "24"), POLL_INTERVAL_MS);
 });

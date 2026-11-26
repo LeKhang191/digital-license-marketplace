@@ -14,6 +14,10 @@ public sealed class VnPayIpnHandler(OrderDbContext db, VnPayService vnpay)
         string Get(string k) => query.TryGetValue(k, out var v) ? v : "";
         if (!vnpay.IsConfigured) return new("99", "VNPay not configured");
         if (!vnpay.ValidateSignature(query)) return new("97", "Invalid signature");
+        if (!vnpay.MatchesTmnCode(Get("vnp_TmnCode"))) return new("99", "Invalid terminal code");
+        var currCode = Get("vnp_CurrCode");
+        if (!string.IsNullOrEmpty(currCode) && !string.Equals(currCode, "VND", StringComparison.OrdinalIgnoreCase))
+            return new("99", "Invalid currency");
         var txnRef = Get("vnp_TxnRef");
         if (txnRef.Length < 32 || !Guid.TryParseExact(txnRef[..32], "N", out var orderId))
             return new("01", "Order not found");

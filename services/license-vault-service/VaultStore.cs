@@ -25,41 +25,80 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
         await cmd.ExecuteNonQueryAsync();
     }
 
-    public async Task ImportAsync(Guid product)
+    public async Task<(int Added, int Duplicates)> ImportLinesAsync(Guid product, IEnumerable<string> lines, CancellationToken ct = default)
     {
         // Separate derived keys for encryption and duplicate detection.
         var enc = HMACSHA256.HashData(masterKey, "vault-encryption-v1"u8);
         var mac = HMACSHA256.HashData(masterKey, "vault-fingerprint-v1"u8);
-        await using var conn = await source.OpenConnectionAsync();
-        await using var tx = await conn.BeginTransactionAsync();
-        int added = 0, duplicates = 0;
-        while (await Console.In.ReadLineAsync() is { } line)
+        try
         {
-            var value = line.Trim();
-            if (value.Length == 0) continue;
-            if (value.Length > 512) throw new InvalidOperationException("Key too long");
-            var plain = Encoding.UTF8.GetBytes(value);
-            var fingerprint = HMACSHA256.HashData(mac, Encoding.UTF8.GetBytes(value.ToUpperInvariant()));
-            var nonce = RandomNumberGenerator.GetBytes(12);
-            var cipher = new byte[plain.Length];
-            var tag = new byte[16];
-            using (var aes = new AesGcm(enc, 16)) aes.Encrypt(nonce, plain, cipher, tag);
-            CryptographicOperations.ZeroMemory(plain);
-            await using var cmd = new NpgsqlCommand("""
-                INSERT INTO vault_keys(id,product_id,fingerprint,encrypted_key)
-                VALUES (@id,@product,@fingerprint,@encrypted) ON CONFLICT (fingerprint) DO NOTHING
-                """, conn, tx);
-            cmd.Parameters.AddWithValue("id", Guid.NewGuid());
-            cmd.Parameters.AddWithValue("product", product);
-            cmd.Parameters.AddWithValue("fingerprint", fingerprint);
-            cmd.Parameters.AddWithValue("encrypted", nonce.Concat(tag).Concat(cipher).ToArray());
-            if (await cmd.ExecuteNonQueryAsync() == 1) added++; else duplicates++;
+            await using var conn = await source.OpenConnectionAsync(ct);
+            await using var tx = await conn.BeginTransactionAsync(ct);
+            int added = 0, duplicates = 0;
+            foreach (var line in lines)
+            {
+                var value = line.Trim();
+                if (value.Length == 0) continue;
+                if (value.Length > 512) throw new InvalidOperationException("Key too long");
+                var plain = Encoding.UTF8.GetBytes(value);
+                var fingerprint = HMACSHA256.HashData(mac, Encoding.UTF8.GetBytes(value.ToUpperInvariant()));
+                var nonce = RandomNumberGenerator.GetBytes(12);
+                var cipher = new byte[plain.Length];
+                var tag = new byte[16];
+                try
+                {
+                    using var aes = new AesGcm(enc, 16);
+                    aes.Encrypt(nonce, plain, cipher, tag);
+                }
+                finally { CryptographicOperations.ZeroMemory(plain); }
+                await using var cmd = new NpgsqlCommand("""
+                    INSERT INTO vault_keys(id,product_id,fingerprint,encrypted_key)
+                    VALUES (@id,@product,@fingerprint,@encrypted) ON CONFLICT (fingerprint) DO NOTHING
+                    """, conn, tx);
+                cmd.Parameters.AddWithValue("id", Guid.NewGuid());
+                cmd.Parameters.AddWithValue("product", product);
+                cmd.Parameters.AddWithValue("fingerprint", fingerprint);
+                cmd.Parameters.AddWithValue("encrypted", nonce.Concat(tag).Concat(cipher).ToArray());
+                if (await cmd.ExecuteNonQueryAsync(ct) == 1) added++; else duplicates++;
+            }
+            await tx.CommitAsync(ct);
+            return (added, duplicates);
         }
-        await tx.CommitAsync();
+        finally
+        {
+            CryptographicOperations.ZeroMemory(enc);
+            CryptographicOperations.ZeroMemory(mac);
+        }
+    }
+
+    public async Task ImportAsync(Guid product)
+    {
+        var lines = new List<string>();
+        while (await Console.In.ReadLineAsync() is { } line) lines.Add(line);
+        var (added, duplicates) = await ImportLinesAsync(product, lines);
         Console.WriteLine($"Imported={added}; duplicates={duplicates}");
     }
 
-    public async Task<bool?> AllocateAsync(OrderPaidEvent evt, CancellationToken ct)
+    public sealed record StockSummaryRow(Guid ProductId, int Available, int Allocated);
+
+    public async Task<List<StockSummaryRow>> GetStockSummaryAsync(CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("""
+            SELECT product_id,
+                   COUNT(*) FILTER (WHERE order_id IS NULL)::int AS available,
+                   COUNT(*) FILTER (WHERE order_id IS NOT NULL)::int AS allocated
+            FROM vault_keys
+            GROUP BY product_id
+            ORDER BY product_id
+            """);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new List<StockSummaryRow>();
+        while (await reader.ReadAsync(ct))
+            rows.Add(new(reader.GetGuid(0), reader.GetInt32(1), reader.GetInt32(2)));
+        return rows;
+    }
+
+    public async Task<(bool Allocated, Guid? MissingProductId)> AllocateAsync(OrderPaidEvent evt, CancellationToken ct)
     {
         if (evt.Items.Count == 0 || evt.Items.Select(i => i.ItemId).Distinct().Count() != evt.Items.Count)
             throw new InvalidOperationException("Invalid order items");
@@ -71,7 +110,7 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
         await using (var cmd = new NpgsqlCommand("SELECT delivered FROM vault_fulfillments WHERE order_id=@order", conn, tx))
         {
             cmd.Parameters.AddWithValue("order", evt.OrderId);
-            if (await cmd.ExecuteScalarAsync(ct) is bool previous) return previous;
+            if (await cmd.ExecuteScalarAsync(ct) is bool previous) return (previous, null);
         }
         foreach (var item in evt.Items.OrderBy(i => i.ProductId).ThenBy(i => i.ItemId))
         {
@@ -86,7 +125,7 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
             {
                 // Roll back the entire order, retain the message for retry after restock.
                 await tx.RollbackAsync(ct);
-                return null;
+                return (false, item.ProductId);
             }
         }
         await using (var cmd = new NpgsqlCommand("INSERT INTO vault_fulfillments(order_id,user_id,delivered) VALUES(@order,@user,true)", conn, tx))
@@ -96,7 +135,7 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
             await cmd.ExecuteNonQueryAsync(ct);
         }
         await tx.CommitAsync(ct);
-        return true;
+        return (true, null);
     }
     // Existing delivered rows are automatically eligible for dispatch after upgrade.
     public async Task<List<LicenseDeliveredEvent>> PendingDeliveriesAsync(CancellationToken ct)

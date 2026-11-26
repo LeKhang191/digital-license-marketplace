@@ -76,6 +76,19 @@ public sealed class OrdersController(
         return order is null ? NotFound() : Ok(order);
     }
 
+    [HttpGet("admin/refunds")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> ListRefunds(CancellationToken ct) =>
+        Ok(await orders.ListRefundsAsync(ct));
+
+    [HttpPost("{id:guid}/refund")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> CompleteRefund(Guid id, CancellationToken ct)
+    {
+        var (order, error) = await orders.CompleteRefundAsync(id, ct);
+        return error is not null ? MapError(error) : Ok(order);
+    }
+
     [HttpGet("{id:guid}/keys")]
     public async Task<IActionResult> Keys(Guid id, CancellationToken ct)
     {

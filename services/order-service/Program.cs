@@ -43,18 +43,27 @@ builder.Services.AddScoped<IOrderManager, OrderManager>();
 builder.Services.AddScoped<VnPayIpnHandler>();
 builder.Services.AddHostedService<PaidOrderDispatchWorker>();
 builder.Services.AddHostedService<DeliveryResultWorker>();
-builder.Services.AddKeycloakAuth(builder.Configuration);
+builder.Services.AddKeycloakAuth(builder.Configuration, builder.Environment);
 
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Dev only. Thay bằng EF migrations sau.
+// Dev only. Thay bằng EF migrations khi có công cụ migration online.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
     await db.Database.EnsureCreatedAsync();
+    // Additive upgrade for existing development databases (mirrors repair-order-db-schema.sql).
+    await db.Database.ExecuteSqlRawAsync("""
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS "PaymentRef" varchar(64);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS "VnpTransactionNo" varchar(32);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS "VnpPayDate" varchar(14);
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS "PaidAtUtc" timestamptz;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS "PaidEventSentAtUtc" timestamptz;
+        CREATE INDEX IF NOT EXISTS "IX_orders_PaymentRef" ON orders ("PaymentRef");
+        """);
 }
 
 app.UseAuthentication();

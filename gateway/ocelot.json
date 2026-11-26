@@ -60,6 +60,21 @@
       ]
     },
     {
+      "DownstreamPathTemplate": "/api/vault/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "license-vault",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/vault/{everything}",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
       "DownstreamPathTemplate": "/api/orders/vnpay-ipn",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
@@ -73,6 +88,35 @@
         "GET"
       ],
       "Priority": 1
+    },
+    {
+      "DownstreamPathTemplate": "/api/orders/admin/refunds",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/orders/admin/refunds",
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "Priority": 1
+    },
+    {
+      "DownstreamPathTemplate": "/api/orders/{id}/refund",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "order",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/orders/{id}/refund",
+      "UpstreamHttpMethod": [
+        "POST"
+      ]
     },
     {
       "DownstreamPathTemplate": "/api/orders/{id}/keys",

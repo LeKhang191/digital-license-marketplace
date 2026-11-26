@@ -239,7 +239,8 @@ public sealed class RefundOrchestrator(
                                 order.Id,
                                 order.KeycloakUserId,
                                 order.CustomerEmail,
-                                order.TotalAmount),
+                                order.TotalAmount,
+                                order.CustomerEmailVerified),
                             new JsonSerializerOptions(
                                 JsonSerializerDefaults.Web)),
                         CreatedAtUtc = DateTime.UtcNow,

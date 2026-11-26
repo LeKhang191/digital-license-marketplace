@@ -213,6 +213,27 @@ public sealed class OrderFulfillmentService(
             }
         }
 
+        if (status == "ASSIGNED")
+        {
+            var now = DateTime.UtcNow;
+
+            db.OutboxMessages.Add(new OutboxMessage
+            {
+                AggregateId = order.Id,
+                RoutingKey = EventRoutes.OrderCompleted,
+                Payload = JsonSerializer.Serialize(
+                    new OrderCompletedEvent(
+                        order.Id,
+                        order.KeycloakUserId,
+                        order.CustomerEmail,
+                        order.TotalAmount,
+                        order.CustomerEmailVerified),
+                    Json),
+                CreatedAtUtc = now,
+                NextRetryAtUtc = now
+            });
+        }
+
         db.FulfillmentResults.Add(
             new FulfillmentResult
             {

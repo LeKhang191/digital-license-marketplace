@@ -27,7 +27,8 @@ public static class OrderErrors
 public interface IOrderManager
 {
     Task<(OrderResponse? Order, string? Error)> CreateAsync(
-        string userId, string? email, CreateOrderRequest request,
+        string userId, string? email,
+        bool emailVerified, CreateOrderRequest request,
         string clientIp, CancellationToken ct);
 
     Task<(OrderResponse? Order, string? Error)> PayAsync(
@@ -122,7 +123,8 @@ public sealed class OrderManager(
     }
 
     public async Task<(OrderResponse? Order, string? Error)> CreateAsync(
-        string userId, string? email, CreateOrderRequest request,
+        string userId, string? email,
+        bool emailVerified, CreateOrderRequest request,
         string clientIp, CancellationToken ct)
     {
         var method = request.PaymentMethod?
@@ -149,6 +151,8 @@ public sealed class OrderManager(
         {
             KeycloakUserId = userId,
             CustomerEmail = email,
+            CustomerEmailVerified = emailVerified
+                && !string.IsNullOrWhiteSpace(email),
             PaymentMethod = method,
             Status = OrderStatus.Pending,
             TotalAmount = product.Price * request.Quantity

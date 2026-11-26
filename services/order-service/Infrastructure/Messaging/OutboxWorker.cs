@@ -150,6 +150,23 @@ public sealed class OutboxWorker(
                 break;
             }
 
+            case EventRoutes.OrderCompleted:
+            {
+                var evt =
+                    JsonSerializer.Deserialize<OrderCompletedEvent>(
+                        message.Payload,
+                        Json)
+                    ?? throw new InvalidOperationException(
+                        "Invalid OrderCompletedEvent payload");
+
+                await publisher.PublishAsync(
+                    message.RoutingKey,
+                    evt,
+                    ct);
+
+                break;
+            }
+
             case EventRoutes.OrderRefunded:
             {
                 var evt =

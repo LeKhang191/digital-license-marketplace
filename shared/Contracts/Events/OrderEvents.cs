@@ -16,4 +16,12 @@ public sealed record OrderRefundedEvent(
     Guid OrderId,
     string KeycloakUserId,
     string? CustomerEmail,
-    decimal Amount);
+    decimal Amount,
+    bool CustomerEmailVerified = false);
+
+public sealed record OrderCompletedEvent(
+    Guid OrderId,
+    string KeycloakUserId,
+    string? CustomerEmail,
+    decimal Amount,
+    bool CustomerEmailVerified);

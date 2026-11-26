@@ -7,6 +7,8 @@ import hashlib
 import uuid
 import base64
 import importlib.util
+import synthetic_ipn
+from test_helpers import api_result
 
 from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
@@ -60,14 +62,7 @@ if subject(CUSTOMER) == subject(OTHER):
     raise SystemExit("[STOP] Use two different customers")
 
 def api(method, path, token=None, data=None):
-    try:
-        return 200, t.request(method, path, token, data)
-    except HTTPError as e:
-        try:
-            body = json.loads(e.read())
-        except Exception:
-            body = {}
-        return e.code, body
+    return api_result(t.request, method, path, token, data)
 
 def sql(statement):
     return t.sql("payment_db", statement)
@@ -118,49 +113,15 @@ def outbox_count(order):
     """))
 
 def params(order, **overrides):
-    p = {
-        "vnp_Amount": order["amount"],
-        "vnp_BankCode": "NCB",
-        "vnp_CardType": "ATM",
-        "vnp_OrderInfo": "DevelopmentTest",
-        "vnp_PayDate": (
-            datetime.now(timezone.utc)
-            + timedelta(hours=7)
-        ).strftime("%Y%m%d%H%M%S"),
-        "vnp_ResponseCode": "00",
-        "vnp_TmnCode": TMN,
-        "vnp_TransactionNo": order["tx"],
-        "vnp_TransactionStatus": "00",
-        "vnp_TxnRef": order["ref"],
-    }
+    return synthetic_ipn.params(order, TMN, **overrides)
 
-    p.update(overrides)
-    return p
 
 def ipn(order, mode="valid", **overrides):
-    p = params(order, **overrides)
-    query = urlencode(sorted(
-        (k, v) for k, v in p.items() if v
-    ))
-
-    signature = hmac.new(
-        SECRET.encode(),
-        query.encode(),
-        hashlib.sha512
-    ).hexdigest()
-
-    if mode == "invalid":
-        signature = "0" * 128
-
-    if mode != "missing":
-        query += "&vnp_SecureHash=" + signature
-
-    result = t.request(
-        "GET",
-        "/orders/vnpay-ipn?" + query
+    return synthetic_ipn.ipn(
+        t.request, TMN, SECRET,
+        order, mode, **overrides
     )
 
-    return result.get("RspCode")
 
 def fail_ipn(order):
     return ipn(
@@ -168,6 +129,7 @@ def fail_ipn(order):
         vnp_ResponseCode="24",
         vnp_TransactionStatus="02"
     )
+
 
 check = t.check
 

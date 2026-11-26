@@ -134,6 +134,8 @@ docker compose --profile migration run --rm migrator order
 docker compose --profile migration run --rm migrator license
 docker compose --profile migration run --rm migrator payment
 
+bash scripts/migrate-notification.sh
+
 echo "================================="
 echo " Database migrations completed."
 echo "================================="

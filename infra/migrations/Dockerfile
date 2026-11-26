@@ -19,6 +19,7 @@ RUN dotnet restore services/catalog-service/Catalog.Api.csproj \
     && dotnet restore services/payment-service/Payment.Api.csproj
 
 COPY shared/Contracts/ shared/Contracts/
+COPY shared/Infrastructure/ shared/Infrastructure/
 COPY services/catalog-service/ services/catalog-service/
 COPY services/order-service/ services/order-service/
 COPY services/license-vault-service/ services/license-vault-service/

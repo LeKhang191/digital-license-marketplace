@@ -6,10 +6,12 @@ import time
 import shlex
 import subprocess
 import importlib.util
+from test_helpers import api_result
 
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from urllib.error import HTTPError
+from urllib.request import urlopen
 from decimal import Decimal
 
 spec = importlib.util.spec_from_file_location(
@@ -78,15 +80,7 @@ t.request = authenticated_request
 
 
 def api(method, path, token=None, data=None):
-    try:
-        return 200, t.request(method, path, token, data)
-    except HTTPError as exc:
-        try:
-            body = json.loads(exc.read())
-        except Exception:
-            body = {}
-
-        return exc.code, body
+    return api_result(t.request, method, path, token, data)
 
 
 def check(name, condition):
@@ -150,6 +144,56 @@ def preflight():
         )
 
     print("[PASS] Sandbox merchant configured")
+
+    products = t.request(
+        "GET", "/catalog/products"
+    )
+
+    if products is None:
+        raise RuntimeError("Catalog API unavailable")
+
+    print("[PASS] Local API Gateway reachable")
+
+    codespace = os.environ.get("CODESPACE_NAME")
+    domain = os.environ.get(
+        "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"
+    )
+
+    public_ipn = os.environ.get("SANDBOX_PUBLIC_IPN")
+
+    if not public_ipn and codespace and domain:
+        public_ipn = (
+            f"https://{codespace}-8000.{domain}"
+            "/api/orders/vnpay-ipn"
+        )
+
+    if not public_ipn:
+        raise RuntimeError(
+            "Set SANDBOX_PUBLIC_IPN to your public HTTPS endpoint"
+        )
+
+    if urlparse(public_ipn).scheme != "https":
+        raise RuntimeError("Public IPN must use HTTPS")
+
+    try:
+        with urlopen(public_ipn, timeout=15) as response:
+            result = json.load(response)
+
+            if (
+                response.status != 200
+                or result.get("RspCode") != "97"
+            ):
+                raise RuntimeError("Unexpected IPN response")
+
+    except Exception:
+        raise RuntimeError(
+            "Public IPN unavailable. "
+            "Check Codespaces port 8000 visibility "
+            "and VNPay IPN configuration."
+        ) from None
+
+    print("[PASS] Public IPN endpoint reachable")
+
 
     print("[INFO] No synthetic IPN will be generated")
 
@@ -288,23 +332,43 @@ def show_state(order):
 
 
 def wait_for(fn, timeout=180):
-    deadline = time.monotonic() + timeout
+    start = time.monotonic()
 
-    while time.monotonic() < deadline:
+    while time.monotonic() - start < timeout:
         if fn():
             return True
 
-        time.sleep(2)
+        elapsed = int(time.monotonic() - start)
+
+        print(
+            f"[WAIT {elapsed:03d}/{timeout}s]",
+            flush=True
+        )
+
+        time.sleep(3)
 
     return False
 
 
 def wait_completed(order, timeout=180):
-    return wait_for(
-        lambda: order_status(order) == "COMPLETED"
-        and assigned(order) == 1,
-        timeout
-    )
+    def completed():
+        payment = payment_status(order)
+        status = order_status(order)
+        keys = assigned(order)
+
+        print(
+            f"[STATE] Payment={payment} | "
+            f"Order={status} | Keys={keys}",
+            flush=True
+        )
+
+        return (
+            payment == "SUCCEEDED"
+            and status == "COMPLETED"
+            and keys == 1
+        )
+
+    return wait_for(completed, timeout)
 
 
 def check_success(order):

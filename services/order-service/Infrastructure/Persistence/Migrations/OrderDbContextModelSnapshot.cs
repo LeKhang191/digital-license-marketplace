@@ -59,6 +59,9 @@ namespace OrderService.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<bool>("CustomerEmailVerified")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("KeycloakUserId")
                         .IsRequired()
                         .HasMaxLength(64)

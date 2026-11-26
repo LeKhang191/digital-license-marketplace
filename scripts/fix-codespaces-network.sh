@@ -53,6 +53,39 @@ else
     echo "[OK] Docker bridge firewall rule added."
 fi
 
+
+echo "[Test] Checking outbound firewall..."
+
+OUT_IF=$(ip -4 route show default |
+    awk 'NR==1 {print $5}')
+
+if [[ -z "$OUT_IF" ]]; then
+    echo "[ERROR] Default network interface not found."
+    exit 1
+fi
+
+ensure_forward_rule() {
+    if ! sudo iptables-legacy -C FORWARD "$@" 2>/dev/null; then
+        sudo iptables-legacy -I FORWARD 1 "$@"
+    fi
+}
+
+# Allow outbound connections from the project bridge.
+ensure_forward_rule \
+    -i "$BRIDGE" -o "$OUT_IF" \
+    -m conntrack \
+    --ctstate NEW,ESTABLISHED,RELATED \
+    -j ACCEPT
+
+# Allow responses to existing outbound connections.
+ensure_forward_rule \
+    -i "$OUT_IF" -o "$BRIDGE" \
+    -m conntrack \
+    --ctstate ESTABLISHED,RELATED \
+    -j ACCEPT
+
+echo "[OK] Outbound firewall rules configured."
+
 echo "[Test] Checking PostgreSQL connectivity..."
 
 docker run --rm \

@@ -26,6 +26,10 @@ public sealed class OrdersController(
         {
             var (order, error) = await orders.CreateAsync(
                 UserId, User.FindFirst("email")?.Value,
+                string.Equals(
+                    User.FindFirst("email_verified")?.Value,
+                    "true",
+                    StringComparison.OrdinalIgnoreCase),
                 request, ClientIp(), ct);
 
             if (error is not null) return MapError(error);

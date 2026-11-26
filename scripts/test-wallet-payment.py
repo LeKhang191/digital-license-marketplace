@@ -2,6 +2,7 @@
 
 import base64
 import importlib.util
+from test_helpers import api_result
 import json
 import uuid
 
@@ -33,17 +34,7 @@ def subject(token):
 
 
 def api(method, path, token=None, data=None):
-    try:
-        return 200, t.request(
-            method, path, token, data
-        )
-    except HTTPError as e:
-        try:
-            body = json.loads(e.read())
-        except Exception:
-            body = {}
-
-        return e.code, body
+    return api_result(t.request, method, path, token, data)
 
 
 def sql(statement):

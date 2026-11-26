@@ -2,6 +2,8 @@
 
 import importlib.util
 import uuid
+import json
+import subprocess
 
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -171,6 +173,90 @@ def purchased(name, token, quantity=1):
     return product, order
 
 
+def check_wrong_refund_amount(order, customer_id, token):
+    before = balance(token)
+
+    row = t.sql("payment_db", f"""
+        SELECT json_build_object(
+            'paymentRef', "PaymentRef",
+            'amount', "Amount"
+        )
+        FROM payments
+        WHERE "OrderId" = {lit(order["id"])};
+    """)
+
+    payment = json.loads(row)
+
+    body = json.dumps({
+        "requestId": str(uuid.uuid4()),
+        "orderId": order["id"],
+        "customerId": customer_id,
+        "paymentRef": payment["paymentRef"],
+        "expectedAmount": payment["amount"] + 1,
+        "reason": "ExpectedAmount mismatch test",
+        "requestedBy": customer_id
+    })
+
+    # Send directly inside Payment container.
+    # The internal key stays inside the container.
+
+    command = r"""
+        set -e
+
+        body=$(cat)
+
+        test -n "$InternalService__Key"
+
+        exec 3<>/dev/tcp/127.0.0.1/8080
+
+        printf 'POST /api/internal/refunds/wallet HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nX-Internal-Service-Key: %s\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s'             "$InternalService__Key" "${#body}" "$body" >&3
+
+        cat <&3
+    """
+
+    result = subprocess.run(
+        [
+            "docker", "compose", "exec", "-T",
+            "payment", "bash", "-c", command
+        ],
+        input=body,
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=20,
+        cwd=t.ROOT
+    )
+
+    raw = result.stdout
+
+    check(
+        "Refund amount mismatch rejected",
+        raw.startswith("HTTP/1.1 409")
+        and "REFUND_DATA_CONFLICT" in raw
+    )
+
+    check(
+        "Amount mismatch leaves wallet unchanged",
+        balance(token) == before
+    )
+
+    check(
+        "Amount mismatch creates no refund",
+        t.sql("payment_db", f"""
+            SELECT count(*)
+            FROM refunds r
+            JOIN payments p
+                ON p."Id" = r."PaymentId"
+            WHERE p."OrderId" = {lit(order["id"])};
+        """) == "0"
+    )
+
+    check(
+        "Amount mismatch leaves payment SUCCEEDED",
+        payment_status(order) == "SUCCEEDED"
+    )
+
+
 def main():
     print("===== REFUND INTEGRATION TEST =====")
     print("DEV ONLY: creates synthetic wallet credits and keys.")
@@ -225,6 +311,12 @@ def main():
             customer,
             {}
         )[0] in (401, 403, 404)
+    )
+
+    print("\n===== REFUND AMOUNT VALIDATION =====")
+
+    check_wrong_refund_amount(
+        a, customer_id, customer
     )
 
     print("\n===== CUSTOMER REFUND =====")

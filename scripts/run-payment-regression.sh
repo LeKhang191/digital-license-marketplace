@@ -1,30 +1,54 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-suites=(
-    test-vnpay-rollback.py
-    test-vnpay-reliability.py
-    test-wallet-core.py
-    test-wallet-payment.py
-    test-refund-integration.py
-    test-license-allocation.py
-    test-customer-ownership.py
-    test-license-replacement.py
-)
+echo "Development environment only."
+echo "Tests may modify test data and stop services."
 
-for suite in "${suites[@]}"; do
+read -rp "Type TEST to continue: " confirm
+[[ "$confirm" == "TEST" ]] || exit 2
+
+[[ "${VNPAY_TMN_CODE:-}" == "TEST0001" ]] || {
+    echo "[STOP] Synthetic merchant required."
+    exit 2
+}
+
+[[ -n "${VNPAY_HASH_SECRET:-}" ]] || {
+    echo "[STOP] Synthetic secret required."
+    exit 2
+}
+
+docker compose exec -T payment sh -c \
+    'test "$VnPay__TmnCode" = TEST0001' || {
+    echo "[STOP] Payment runtime is not synthetic."
+    exit 2
+}
+
+passed=0
+
+for suite in scripts/test-*.py scripts/test-*.sh; do
+
+    case "$(basename "$suite")" in
+        test-vnpay-sandbox.py)
+            continue
+            ;;
+    esac
+
     echo
-    echo "========================================"
-    echo "RUNNING: $suite"
-    echo "========================================"
+    echo "===== RUNNING: $suite ====="
 
-    python3 -u "scripts/$suite"
+    if [[ "$suite" == *.py ]]; then
+        python3 -u "$suite"
+    else
+        bash "$suite"
+    fi
 
-    echo "[SUITE COMPLETED] $suite"
+    passed=$((passed + 1))
+
+    echo "[SUITE EXIT OK] $suite"
 done
 
 echo
-echo "[COMPLETE] All regression scripts exited successfully."
+echo "===== REGRESSION SUMMARY ====="
+echo "SUCCESSFUL SUITE EXITS: $passed"

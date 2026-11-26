@@ -13,4 +13,5 @@ public static class EventRoutes
     public const string KeyAssigned = "key.assigned";
     public const string KeyOutOfStock = "key.out_of_stock";
     public const string OrderRefunded = "order.refunded";
+    public const string OrderCompleted = "order.completed";
 }

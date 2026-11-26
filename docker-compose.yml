@@ -175,6 +175,46 @@ services:
     restart: unless-stopped
 
 
+  notification:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+
+    environment:
+      ConnectionStrings__NotificationDb: "Host=postgres;Port=5432;Database=notification_db;Username=app;Password=${DB_PASSWORD}"
+
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBITMQ_USER:?RABBITMQ_USER required}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+
+      Smtp__Enabled: "${SMTP_ENABLED:-false}"
+      Smtp__Host: "${SMTP_HOST:-smtp.gmail.com}"
+      Smtp__Port: "${SMTP_PORT:-587}"
+      Smtp__EnableSsl: "${SMTP_ENABLE_SSL:-true}"
+      Smtp__Username: "${SMTP_USERNAME:-}"
+      Smtp__Password: "${SMTP_PASSWORD:-}"
+      Smtp__FromEmail: "${SMTP_FROM_EMAIL:-}"
+      Smtp__FromName: "${SMTP_FROM_NAME:-Digital License Marketplace}"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/notification-ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+    networks:
+      - backend
+
+    restart: unless-stopped
+
+
   gateway:
     build:
       context: .

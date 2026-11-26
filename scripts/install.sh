@@ -60,6 +60,12 @@ if ! grep -q '^LICENSE_FINGERPRINT_KEY=' .env; then
 fi
 
 
+# Initialize internal service authentication
+if ! grep -q '^PAYMENT_INTERNAL_KEY=' .env; then
+    printf '\nPAYMENT_INTERNAL_KEY=%s\n' \
+        "$(openssl rand -hex 32)" >> .env
+fi
+
 chmod 600 .env
 
 echo "License Vault secrets are configured."
@@ -82,7 +88,7 @@ bash scripts/configure-rabbitmq.sh
 # Dừng backend nếu đang chạy
 echo "[2/4] Stopping application services..."
 
-docker compose stop gateway order catalog license-vault
+docker compose stop gateway order catalog license-vault payment
 
 # Thực hiện database migration
 echo "[3/4] Applying database migrations..."
@@ -92,7 +98,7 @@ bash scripts/migrate.sh
 # Build và khởi động backend
 echo "[4/4] Building and starting backend..."
 
-docker compose up -d --build catalog order license-vault gateway
+docker compose up -d --build catalog order license-vault payment gateway
 
 # Hiển thị trạng thái
 echo ""

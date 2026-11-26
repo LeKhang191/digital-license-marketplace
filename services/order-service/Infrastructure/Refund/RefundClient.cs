@@ -86,6 +86,7 @@ public sealed class RefundClient(
     public Task<(RefundCreditResponse? Result, string? Error)>
         CreditAsync(
             RefundOperation operation,
+            decimal expectedAmount,
             CancellationToken ct)
         => SendAsync<RefundCreditResponse>(
             "RefundPayment",
@@ -96,6 +97,7 @@ public sealed class RefundClient(
                 operation.OrderId,
                 operation.CustomerId,
                 operation.PaymentRef,
+                ExpectedAmount = expectedAmount,
                 operation.Reason,
                 operation.RequestedBy
             },

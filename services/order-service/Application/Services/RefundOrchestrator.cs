@@ -26,11 +26,7 @@ public sealed class RefundOrchestrator(
     {
         operation.RetryCount++;
 
-        var delay = Math.Min(
-            300,
-            Math.Pow(
-                2,
-                Math.Min(operation.RetryCount, 8)));
+        var delay = 1 << Math.Min(operation.RetryCount, 8);
 
         operation.NextRetryAtUtc =
             DateTime.UtcNow.AddSeconds(delay);
@@ -176,7 +172,8 @@ public sealed class RefundOrchestrator(
                     }
 
                     var (result, error) =
-                        await client.CreditAsync(operation, ct);
+                        await client.CreditAsync(
+                            operation, order.TotalAmount, ct);
 
                     if (result is null)
                     {

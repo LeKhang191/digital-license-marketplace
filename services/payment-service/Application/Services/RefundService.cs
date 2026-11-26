@@ -11,6 +11,7 @@ public sealed record WalletRefundRequest(
     Guid OrderId,
     string CustomerId,
     string PaymentRef,
+    decimal ExpectedAmount,
     string Reason,
     string RequestedBy);
 
@@ -44,6 +45,7 @@ public sealed class RefundService(PaymentDbContext db)
     {
         if (request.RequestId == Guid.Empty ||
             request.OrderId == Guid.Empty ||
+            request.ExpectedAmount <= 0 ||
             string.IsNullOrWhiteSpace(request.CustomerId) ||
             request.CustomerId.Length > 64 ||
             string.IsNullOrWhiteSpace(request.PaymentRef) ||
@@ -89,7 +91,8 @@ public sealed class RefundService(PaymentDbContext db)
             return (null, "PAYMENT_NOT_FOUND");
 
         if (payment.CustomerId != request.CustomerId ||
-            payment.PaymentRef != request.PaymentRef)
+            payment.PaymentRef != request.PaymentRef ||
+            payment.Amount != request.ExpectedAmount)
         {
             return (null, "REFUND_DATA_CONFLICT");
         }

@@ -187,6 +187,7 @@ services:
       - catalog
       - order
       - license-vault
+      - payment
     networks:
       - backend
     restart: unless-stopped

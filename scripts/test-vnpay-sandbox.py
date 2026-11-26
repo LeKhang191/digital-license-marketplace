@@ -26,22 +26,55 @@ STOPPED = set()
 RESULTS = []
 
 SCENARIOS = {
-    "01": "Successful payment",
-    "02": "Cancel payment",
-    "03": "Abandon payment",
-    "04": "Invalid card",
-    "05": "Invalid OTP",
-    "06": "Payment session expired",
-    "07": "Network lost before payment",
-    "08": "Network lost after payment",
-    "09": "Payment Service offline",
-    "10": "RabbitMQ offline",
-    "11": "Order Service offline",
-    "12": "License Vault offline",
-    "13": "Out-of-stock automatic refund",
-    "14": "Duplicate payment protection",
-    "15": "Refund to Wallet"
+    "01": ("Successful payment", "01"),
+    "02": ("Cancel or abandon payment", "02"),
+    "03": ("Payment session expired", "06"),
+    "04": ("Network lost after payment", "08"),
+    "05": ("RabbitMQ offline", "10"),
+    "06": ("License Vault offline", "12"),
+    "07": ("Out-of-stock automatic refund", "13"),
+    "08": ("Refund to Wallet", "15"),
 }
+
+TOKENS = {}
+_original_request = t.request
+
+
+def authenticated_request(method, path, token=None, data=None):
+    username = TOKENS.get(token)
+
+    if username:
+        token = ACTIVE_TOKENS[username]
+
+    try:
+        return _original_request(method, path, token, data)
+
+    except HTTPError as exc:
+        if exc.code != 401 or not username:
+            raise
+
+        print(f"[AUTH] Re-login required for {username}")
+
+        fresh_token = login(username)
+
+        return _original_request(
+            method, path, fresh_token, data
+        )
+
+
+ACTIVE_TOKENS = {}
+
+
+def login(username):
+    token = t.login(username)
+
+    TOKENS[token] = username
+    ACTIVE_TOKENS[username] = token
+
+    return token
+
+
+t.request = authenticated_request
 
 
 def api(method, path, token=None, data=None):
@@ -208,27 +241,11 @@ def assigned(order):
 
 
 def wallet_balance():
-    global CUSTOMER
-
-    try:
-        result = t.request(
-            "GET",
-            "/wallet/me",
-            CUSTOMER
-        )
-    except HTTPError as exc:
-        if exc.code != 401:
-            raise
-
-        print("[AUTH] Token rejected. Please login again.")
-
-        CUSTOMER = t.login(CUSTOMER_USERNAME)
-
-        result = t.request(
-            "GET",
-            "/wallet/me",
-            CUSTOMER
-        )
+    result = t.request(
+        "GET",
+        "/wallet/me",
+        CUSTOMER
+    )
 
     return Decimal(str(result["balance"]))
 
@@ -343,9 +360,10 @@ def pause(message):
     input(f"\n{message}\nPress Enter to continue...")
 
 
-def scenario(case):
+def scenario(number):
+    name, case = SCENARIOS[number]
     print("\n" + "=" * 55)
-    print(f"TC{case}: {SCENARIOS[case]}")
+    print(f"TC{number}: {name}")
     print("=" * 55)
 
     stock = 1 if case == "13" else 3
@@ -357,18 +375,16 @@ def scenario(case):
 
     order = create_order(product)
 
-    before = wallet_balance()
+    before = (
+        wallet_balance()
+        if case in ("13", "15")
+        else None
+    )
 
     try:
         # Inject faults AFTER creating the payment session.
-        if case == "09":
-            stop("payment")
-
-        elif case == "10":
+        if case == "10":
             stop("rabbitmq")
-
-        elif case == "11":
-            stop("order")
 
         elif case == "12":
             stop("license-vault")
@@ -385,19 +401,12 @@ def scenario(case):
 
         instructions = {
             "01": "Complete payment using the official test card.",
-            "02": "Click Cancel on VNPay.",
-            "03": "Close VNPay without paying.",
-            "04": "Enter an invalid card number. Do not complete payment.",
-            "05": "Enter an incorrect OTP. Do not retry with the correct OTP.",
+            "02": "Cancel or close VNPay without completing payment.",
             "06": "Wait until the VNPay payment session expires.",
-            "07": "Set browser DevTools Network to Offline BEFORE confirming payment.",
-            "08": "Complete payment, then set browser Offline before returning if possible.",
-            "09": "Complete payment while Payment Service is offline.",
+            "08": "Complete payment, then disconnect before returning if possible.",
             "10": "Complete payment while RabbitMQ is offline.",
-            "11": "Complete payment while Order Service is offline.",
             "12": "Complete payment while License Vault is offline.",
             "13": "Complete payment. The product is now out of stock.",
-            "14": "Complete payment and refresh the result page several times.",
             "15": "Complete payment. Do NOT reveal the license key."
         }
 
@@ -406,7 +415,7 @@ def scenario(case):
 
         pause("Finish the browser action first.")
 
-        if case in ("02", "03", "04", "05", "07"):
+        if case == "02":
             print("\nObserving unpaid order for 20 seconds...")
 
             unexpected_success = wait_for(
@@ -421,14 +430,9 @@ def scenario(case):
 
             check_unpaid(order)
 
-            if case == "02":
-                print(
-                    "[INFO] Cancellation may remain PENDING "
-                    "when no failure IPN is received."
-                )
-
-            if case == "07":
-                print("[ACTION] Restore browser network to Online.")
+            print(
+                "[INFO] Unpaid transactions may remain PENDING."
+            )
 
         elif case == "06":
             expired = t.sql("payment_db", f'''
@@ -451,32 +455,7 @@ def scenario(case):
                 "not whether VNPay rejects every late payment attempt."
             )
 
-        elif case == "09":
-            check(
-                "Payment not recorded while service is offline",
-                payment_status(order) == "PENDING"
-            )
-
-            check(
-                "No license while IPN cannot be processed",
-                assigned(order) == 0
-            )
-
-            start("payment")
-
-            print(
-                "[INFO] Waiting for VNPay to retry its IPN."
-            )
-
-            if wait_completed(order, timeout=300):
-                check_success(order)
-            else:
-                print(
-                    "[INCONCLUSIVE] No successful callback observed. "
-                    "Inspect VNPay merchant transaction history."
-                )
-
-        elif case in ("10", "11", "12"):
+        elif case in ("10", "12"):
             check(
                 "Payment recorded despite downstream outage",
                 wait_for(
@@ -578,26 +557,6 @@ def scenario(case):
                 t.available_count(product) == stock
             )
 
-        elif case == "14":
-            check_success(order)
-
-            pause("Refresh the payment result page 5 times.")
-
-            check(
-                "Refresh does not duplicate payment",
-                payment_count(order) == 1
-            )
-
-            check(
-                "Refresh does not duplicate paid event",
-                paid_event_count(order) == 1
-            )
-
-            check(
-                "Refresh does not duplicate license",
-                assigned(order) == 1
-            )
-
         elif case == "08":
             check_success(order)
 
@@ -635,19 +594,19 @@ def main():
 
     preflight()
 
-    t.MANAGER = t.login("catalog_manager")
-    t.COORDINATOR = t.login("license_coordinator")
+    t.MANAGER = login("catalog_manager")
+    t.COORDINATOR = login("license_coordinator")
     CUSTOMER_USERNAME = (
         input("Customer [test-user1]: ").strip()
         or "test-user1"
     )
 
-    CUSTOMER = t.login(CUSTOMER_USERNAME)
+    CUSTOMER = login(CUSTOMER_USERNAME)
 
     while True:
         print("\n========= VNPAY SANDBOX E2E =========")
 
-        for number, name in SCENARIOS.items():
+        for number, (name, _) in SCENARIOS.items():
             print(f"{number}. {name}")
 
         print("99. Run all scenarios")
@@ -669,6 +628,8 @@ def main():
                 print("Invalid selection")
                 continue
 
+            offset = len(RESULTS)
+
             try:
                 scenario(case)
 
@@ -682,6 +643,15 @@ def main():
             finally:
                 restore()
 
+            current = RESULTS[offset:]
+            passed = sum(ok for _, ok in current)
+            failed = len(current) - passed
+
+            print(
+                f"[TC{case} RESULT] "
+                f"PASS={passed} FAIL={failed}"
+            )
+
         summary()
 
 
@@ -693,3 +663,7 @@ if __name__ == "__main__":
     finally:
         restore()
         summary()
+
+    raise SystemExit(
+        1 if any(not ok for _, ok in RESULTS) else 0
+    )

@@ -723,5 +723,5 @@ if __name__ == "__main__":
             print(order_id)
 
     raise SystemExit(
-        0 if t.PASSED == 40 and t.FAILED == 0 else 1
+        0 if t.PASSED == 44 and t.FAILED == 0 else 1
     )

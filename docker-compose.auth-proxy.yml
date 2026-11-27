@@ -1,0 +1,18 @@
+services:
+  keycloak:
+    ports: !reset []
+
+  auth-proxy:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on:
+      - keycloak
+    environment:
+      KEYCLOAK_PUBLIC_HOST: "${KEYCLOAK_PUBLIC_HOST:?Missing KEYCLOAK_PUBLIC_HOST}"
+      NGINX_ENVSUBST_FILTER: "^KEYCLOAK_PUBLIC_HOST$"
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ./infra/nginx/keycloak.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      - backend

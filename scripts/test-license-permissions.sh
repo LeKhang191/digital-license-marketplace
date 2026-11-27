@@ -164,7 +164,7 @@ echo ""
 
 echo "===== Authentication ====="
 
-CUSTOMER_TOKEN=$(login customer)
+CUSTOMER_TOKEN=$(login test-user1)
 
 MANAGER_TOKEN=$(login catalog_manager)
 

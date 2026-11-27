@@ -110,7 +110,7 @@ echo "========================================"
 echo " CATALOG ROLE PERMISSION TEST"
 echo "========================================"
 
-CUSTOMER_TOKEN=$(get_token customer)
+CUSTOMER_TOKEN=$(get_token test-user1)
 MANAGER_TOKEN=$(get_token catalog_manager)
 LICENSE_TOKEN=$(get_token license_coordinator)
 AUDITOR_TOKEN=$(get_token transaction_auditor)

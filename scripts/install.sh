@@ -72,6 +72,11 @@ echo "License Vault secrets are configured."
 
 
 # Kiểm tra Docker Compose
+if [[ "${CODESPACES:-false}" == "true" ]]; then
+    bash scripts/configure-codespaces-auth.sh
+    export COMPOSE_FILE=docker-compose.yml:docker-compose.auth-proxy.yml
+fi
+
 echo "Validating Docker Compose..."
 docker compose config --quiet
 
@@ -81,6 +86,11 @@ echo "[1/4] Starting infrastructure..."
 
 docker compose up -d --wait postgres
 docker compose up -d rabbitmq keycloak
+
+if [[ "${CODESPACES:-false}" == "true" ]]; then
+    docker compose up -d auth-proxy
+    echo "After installation, run: bash scripts/configure-auth.sh"
+fi
 
 # Configure RabbitMQ
 bash scripts/configure-rabbitmq.sh

@@ -92,12 +92,12 @@ echo "========================================"
 echo " ORDER AUTHORIZATION TEST"
 echo "========================================"
 
-CUSTOMER_TOKEN=$(get_token customer)
+CUSTOMER_TOKEN=$(get_token test-user1)
 
-read -rp "Second customer username [customer_test]: " SECOND_USER
-SECOND_USER="${SECOND_USER:-customer_test}"
+read -rp "Second customer username [test-user2]: " SECOND_USER
+SECOND_USER="${SECOND_USER:-test-user2}"
 
-if [[ "$SECOND_USER" == "customer" ]]; then
+if [[ "$SECOND_USER" == "test-user1" ]]; then
     echo "Please use a different customer account."
     exit 1
 fi

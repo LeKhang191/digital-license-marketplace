@@ -315,6 +315,31 @@ def published(database, table, id_column, order_id):
     """) == "1"
 
 
+
+def order_outbox_published(order_id):
+    return sql("order_db", f"""
+        SELECT CASE
+            WHEN count(*) > 0
+             AND count(*) FILTER (
+                 WHERE "PublishedAtUtc" IS NULL
+             ) = 0
+            THEN 1 ELSE 0
+        END
+        FROM outbox_messages
+        WHERE "AggregateId" = {literal(order_id)};
+    """) == "1"
+
+
+def order_paid_published(order_id):
+    return sql("order_db", f"""
+        SELECT count(*)
+        FROM outbox_messages
+        WHERE "AggregateId" = {literal(order_id)}
+          AND "RoutingKey" = 'order.paid'
+          AND "PublishedAtUtc" IS NOT NULL;
+    """) == "1"
+
+
 def queue_idle():
     output = run([
         "docker", "compose", "exec", "-T",
@@ -410,12 +435,9 @@ def main():
           AND "RoutingKey" = 'order.paid';
     """)
 
-    sent = wait_for(lambda: published(
-        "order_db",
-        "outbox_messages",
-        "AggregateId",
-        o1,
-    ))
+    sent = wait_for(
+        lambda: order_paid_published(o1)
+    )
 
     check(
         "TC03: Duplicate OrderPaid does not allocate again",
@@ -517,12 +539,7 @@ def main():
     check(
         "TC09: All Order Outbox events published",
         wait_for(lambda: all(
-            published(
-                "order_db",
-                "outbox_messages",
-                "AggregateId",
-                oid,
-            )
+            order_outbox_published(oid)
             for oid in TEST_ORDERS
         )),
     )

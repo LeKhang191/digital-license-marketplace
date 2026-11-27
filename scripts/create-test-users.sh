@@ -83,6 +83,28 @@ print(len(json.load(sys.stdin)))
         --uusername "$username" \
         --rolename "$role"
 
+    if [[ "$role" != "customer" ]]; then
+        kc add-roles \
+            -r "$REALM" \
+            --uusername "$username" \
+            --rolename offline_access \
+            --rolename uma_authorization
+
+        kc add-roles \
+            -r "$REALM" \
+            --uusername "$username" \
+            --cclientid account \
+            --rolename manage-account \
+            --rolename view-profile
+
+        kc remove-roles \
+            -r "$REALM" \
+            --uusername "$username" \
+            --rolename "default-roles-${REALM}"
+
+        echo "[OK] Staff separated from customer default role"
+    fi
+
     echo "[OK] User created: $username"
 }
 
@@ -95,7 +117,13 @@ docker compose exec keycloak "$KCADM" \
     --user admin
 
 create_user \
+    test-user1 \
     customer \
+    "Test" \
+    "Customer"
+
+create_user \
+    test-user2 \
     customer \
     "Test" \
     "Customer"

@@ -160,8 +160,7 @@ if os.getenv("CODESPACES") == "true":
         ],
         "webOrigins": [
             "http://localhost:5173",
-            frontend,
-            "http://localhost:5173"
+            frontend
         ]
     })
 

@@ -70,8 +70,8 @@ def login_customer(username):
 print("===== CUSTOMER A =====")
 
 username_a = input(
-    "Username [customer]: "
-).strip() or "customer"
+    "Username [test-user1]: "
+).strip() or "test-user1"
 
 token_a, subject_a = login_customer(username_a)
 
@@ -95,8 +95,8 @@ print("Target order:", order_id)
 print("\n===== CUSTOMER B =====")
 
 username_b = input(
-    "Username [customer2]: "
-).strip() or "customer2"
+    "Username [test-user2]: "
+).strip() or "test-user2"
 
 token_b, subject_b = login_customer(username_b)
 

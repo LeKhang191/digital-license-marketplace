@@ -16,6 +16,7 @@ import type {
   ProductUpsertRequest,
 } from "../api/types";
 
+import { GameImport } from "../components/GameImport";
 import { vnd } from "../components/format";
 
 const EMPTY_FORM: ProductUpsertRequest = {
@@ -250,6 +251,7 @@ export function AdminPage() {
   return (
     <div className="container">
       <h1>Quản lý danh mục sản phẩm</h1>
+      <GameImport onImported={() => { void loadProducts(); }} />
 
       <div className="grid admin-summary">
         <div className="card">

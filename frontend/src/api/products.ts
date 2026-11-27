@@ -67,3 +67,6 @@ export function deleteProduct(id: string) {
     auth: true,
   });
 }
+
+export const previewSteam = (app: string) => api<import("./types").SteamMetadata>(`/catalog/steam-import/preview?${new URLSearchParams({app})}`, { auth: true });
+export const importSteam = (app: string, price: number) => api<Product>("/catalog/steam-import", { method: "POST", auth: true, body: JSON.stringify({app, price}) });

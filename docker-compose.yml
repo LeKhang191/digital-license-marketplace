@@ -22,10 +22,12 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: app
+      PSQLRC: /etc/dlm/psqlrc
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infra/postgres/psqlrc:/etc/dlm/psqlrc:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app -d catalog_db"]
       interval: 5s
@@ -72,6 +74,9 @@ services:
       context: .
       dockerfile: services/catalog-service/Dockerfile
     environment:
+      GameMetadata__Provider: ${GAME_METADATA_PROVIDER:-Steam}
+      Igdb__ClientId: ${IGDB_CLIENT_ID:-}
+      Igdb__ClientSecret: ${IGDB_CLIENT_SECRET:-}
       ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Database=catalog_db;Username=app;Password=${DB_PASSWORD}"
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
       Keycloak__Issuer: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}/realms/marketplace"

@@ -23,6 +23,9 @@ public sealed class ProductUpsertRequest
     public decimal Price { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public SteamMetadata? ImportedMetadata { get; set; }
 }
 
 public sealed record ProductResponse(
@@ -34,13 +37,15 @@ public sealed record ProductResponse(
     decimal Price,
     bool IsActive,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    SteamMetadata? Steam
 )
 {
     public static ProductResponse From(Product p) => new(
         p.Id, p.Name, p.Slug, p.Description,
         p.Category, p.Price, p.IsActive,
-        p.CreatedAtUtc, p.UpdatedAtUtc
+        p.CreatedAtUtc, p.UpdatedAtUtc,
+        p.SteamMetadataJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<SteamMetadata>(p.SteamMetadataJson)
     );
 }
 

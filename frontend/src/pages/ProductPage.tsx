@@ -5,6 +5,7 @@ import { getProduct } from "../api/products";
 import { createOrder } from "../api/orders";
 import type { Product } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { ProductArtwork } from "../components/ProductCard";
 import { vnd } from "../components/format";
 
 export function ProductPage() {
@@ -97,7 +98,10 @@ export function ProductPage() {
       ) : !product ? (
         <p className="muted">Đang tải...</p>
       ) : (
-        <div className="card">
+        <>
+        <div className="detail-layout">
+        <ProductArtwork product={product}/>
+        <div className="card detail-card">
           <div className="muted">
             {product.category}
           </div>
@@ -185,6 +189,20 @@ export function ProductPage() {
             </div>
           )}
         </div>
+        </div>
+      {product.steam && <section className="steam-details card">
+        <h2>Thông tin game</h2><p>Nguồn metadata: {product.steam.source ?? "Steam"}</p>
+        <p>{product.steam.genres.join(" · ")}</p>
+        <p>Nhà phát triển: {product.steam.developers.join(", ") || "—"}</p>
+        <p>Nhà phát hành: {product.steam.publishers.join(", ") || "—"}</p>
+        <p>Ngày phát hành: {product.steam.releaseDate || "—"}</p>
+        <a href={`https://store.steampowered.com/app/${product.steam.appId}/`} target="_blank" rel="noopener noreferrer">Steam Store ↗</a>
+        {product.steam.trailerUrl && <video controls preload="none" src={product.steam.trailerUrl} />}
+        {!!product.steam.screenshots.length && <><h2>Hình ảnh trong game</h2><div className="steam-gallery">{product.steam.screenshots.map((url,i)=><a key={i} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Screenshot ${i+1}`} loading="lazy"/></a>)}</div></>}
+        <h2>Cấu hình PC</h2><div className="steam-requirements"><div><h3>Tối thiểu</h3><p>{product.steam.minimumRequirements || "Chưa có thông tin"}</p></div><div><h3>Khuyến nghị</h3><p>{product.steam.recommendedRequirements || "Chưa có thông tin"}</p></div></div>
+      </section>}
+
+        </>
       )}
     </div>
   );

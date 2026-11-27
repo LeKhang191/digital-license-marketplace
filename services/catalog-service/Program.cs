@@ -16,6 +16,16 @@ builder.Services.AddDbContext<CatalogDbContext>(
 );
 
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IgdbMetadataProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(12);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient<SteamMetadataProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://store.steampowered.com/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();

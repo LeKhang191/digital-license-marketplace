@@ -1,0 +1,10 @@
+-- Interactive terminal only; leave machine-readable SQL output unchanged.
+\set dlm_interactive `if [ -t 0 ] && [ -t 1 ]; then printf true; else printf false; fi`
+\if :dlm_interactive
+  \pset linestyle unicode
+  \pset border 2
+  \pset pager off
+  \pset null '-'
+  \pset footer on
+\endif
+\unset dlm_interactive

@@ -1,4 +1,11 @@
+export interface SteamMetadata {
+  source?: string; appId: number; name: string; description: string; headerImage: string; posterImage: string;
+  screenshots: string[]; genres: string[]; developers: string[]; publishers: string[];
+  releaseDate: string; minimumRequirements: string; recommendedRequirements: string; trailerUrl?: string | null;
+}
+
 export interface Product {
+  steam?: SteamMetadata | null;
   id: string;
   name: string;
   slug: string;

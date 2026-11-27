@@ -13,9 +13,20 @@ public sealed class SupportDbContext(
     public DbSet<SupportMessage> SupportMessages =>
         Set<SupportMessage>();
 
+    public DbSet<ExternalSupportLink> ExternalSupportLinks => Set<ExternalSupportLink>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
+        var link = modelBuilder.Entity<ExternalSupportLink>();
+        link.ToTable("support_external_links");
+        link.HasKey(x => x.TicketId);
+        link.HasOne<SupportTicket>().WithOne().HasForeignKey<ExternalSupportLink>(x => x.TicketId)
+            .OnDelete(DeleteBehavior.Restrict);
+        link.HasIndex(x => x.IssueId).IsUnique();
+        link.Property(x => x.Version).IsConcurrencyToken();
+        link.Property(x => x.CommentsJson).HasColumnType("jsonb");
+
         var ticket = modelBuilder.Entity<SupportTicket>();
 
         ticket.ToTable("support_tickets");

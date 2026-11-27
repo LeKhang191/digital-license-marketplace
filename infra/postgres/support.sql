@@ -47,4 +47,16 @@ CREATE INDEX IF NOT EXISTS
     "IX_support_messages_TicketId_CreatedAtUtc"
 ON support_messages ("TicketId", "CreatedAtUtc");
 
+CREATE TABLE IF NOT EXISTS support_external_links (
+    "TicketId" uuid PRIMARY KEY REFERENCES support_tickets ("Id") ON DELETE RESTRICT,
+    "State" text NOT NULL CHECK ("State" IN ('PENDING', 'LINKED', 'UNCERTAIN')),
+    "IssueId" text UNIQUE,
+    "IssueKey" text,
+    "ExternalStatus" text,
+    "CommentsJson" jsonb NOT NULL DEFAULT '[]'::jsonb,
+    "CreatedAtUtc" timestamptz NOT NULL,
+    "SyncedAtUtc" timestamptz,
+    "Version" uuid NOT NULL
+);
+
 COMMIT;

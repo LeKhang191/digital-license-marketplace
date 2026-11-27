@@ -44,6 +44,15 @@ foreach (var endpoint in new[]
 builder.Services.AddKeycloakAuth(
     builder.Configuration);
 
+builder.Services.AddHttpClient("Jira", client =>
+    client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    });
+builder.Services.AddScoped<SupportService.Infrastructure.Integrations.JiraClient>();
+
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
 

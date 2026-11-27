@@ -221,6 +221,12 @@ services:
       dockerfile: services/support-service/Dockerfile
 
     environment:
+      Jira__Enabled: "${JIRA_ENABLED:-false}"
+      Jira__BaseUrl: "${JIRA_BASE_URL:-}"
+      Jira__Email: "${JIRA_EMAIL:-}"
+      Jira__ApiToken: "${JIRA_API_TOKEN:-}"
+      Jira__ServiceDeskId: "${JIRA_SERVICE_DESK_ID:-}"
+      Jira__RequestTypeId: "${JIRA_REQUEST_TYPE_ID:-}"
       InternalService__Key: "${PAYMENT_INTERNAL_KEY:?PAYMENT_INTERNAL_KEY required}"
       ConnectionStrings__SupportDb: "Host=postgres;Port=5432;Database=support_db;Username=app;Password=${DB_PASSWORD}"
 

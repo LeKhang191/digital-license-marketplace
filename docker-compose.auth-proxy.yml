@@ -12,7 +12,9 @@ services:
       NGINX_ENVSUBST_FILTER: "^KEYCLOAK_PUBLIC_HOST$"
     ports:
       - "127.0.0.1:8081:80"
+      - "127.0.0.1:8002:8002"
     volumes:
+      - ./infra/nginx/jira-webhook.conf:/etc/nginx/conf.d/jira-webhook.conf:ro
       - ./infra/nginx/keycloak.conf.template:/etc/nginx/templates/default.conf.template:ro
     networks:
       - backend

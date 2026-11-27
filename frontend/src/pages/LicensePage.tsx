@@ -11,6 +11,11 @@ import {
   importLicenses,
   importLicenseFile,
   disableLicense,
+  getKinguinQuote,
+  enqueueKinguinMockOrder,
+  getKinguinMockOrder,
+  type KinguinMockOrder,
+  type KinguinQuote,
 } from "../api/licenses";
 
 import type {
@@ -28,6 +33,58 @@ export function LicensePage() {
   const [licenses, setLicenses] = useState<LicenseKey[]>([]);
 
   const [productId, setProductId] = useState("");
+  const [supplierQuantity, setSupplierQuantity] = useState(1);
+  const [supplierQuote, setSupplierQuote] = useState<KinguinQuote | null>(null);
+  const [supplierError, setSupplierError] = useState("");
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [supplierRefresh, setSupplierRefresh] = useState(0);
+  const [mockRequest, setMockRequest] = useState<{ id: string; product: string; quantity: number } | null>(null);
+  const [mockResult, setMockResult] = useState<KinguinMockOrder | null>(null);
+  const [mockBusy, setMockBusy] = useState(false);
+  const [mockError, setMockError] = useState("");
+
+  async function submitMockOrder() {
+    if (mockBusy || supplierQuote?.mode !== "Mock") return;
+    const request = mockRequest ?? { id: crypto.randomUUID(), product: productId, quantity: supplierQuantity };
+    setMockRequest(request);
+    setMockBusy(true);
+    setMockError("");
+    try {
+      setMockResult(await enqueueKinguinMockOrder(request.id, request.product, request.quantity));
+      setSupplierRefresh((v) => v + 1);
+    } catch (e) {
+      setMockError(e instanceof Error ? e.message : "Không thể gửi đơn mô phỏng");
+    } finally { setMockBusy(false); }
+  }
+
+  async function refreshMockOrder() {
+    if (!mockRequest || mockBusy) return;
+    setMockBusy(true);
+    setMockError("");
+    try {
+      setMockResult(await getKinguinMockOrder(mockRequest.id));
+      setSupplierRefresh((v) => v + 1);
+    } catch (e) {
+      setMockError(e instanceof Error ? e.message : "Không thể tra cứu đơn mô phỏng");
+    } finally { setMockBusy(false); }
+  }
+
+
+  useEffect(() => {
+    setSupplierQuote(null);
+    setSupplierError("");
+    setSupplierLoading(false);
+    if (!ready || !isLicenseCoordinator || !productId || supplierRefresh === 0) return;
+    const controller = new AbortController();
+    setSupplierLoading(true);
+    getKinguinQuote(productId, supplierQuantity, controller.signal)
+      .then((data) => { if (!controller.signal.aborted) setSupplierQuote(data); })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setSupplierError(error instanceof Error ? error.message : "Không thể tra cứu Kinguin");
+      })
+      .finally(() => { if (!controller.signal.aborted) setSupplierLoading(false); });
+    return () => controller.abort();
+  }, [ready, isLicenseCoordinator, productId, supplierQuantity, supplierRefresh]);
 
   const [mode, setMode] = useState<"manual" | "file">("manual");
 
@@ -427,6 +484,50 @@ export function LicensePage() {
                 {selectedInventory?.available ?? 0} Key
                 khả dụng
               </p>
+            )}
+
+            {productId && (
+              <section className="card">
+                <h3>Kinguin — tra cứu nhà cung cấp</h3>
+                <p className="muted">Không mua key thật hoặc thay đổi kho license thật hay giá bán.</p>
+                <label>Số lượng
+                  <select value={supplierQuantity} onChange={(e) => setSupplierQuantity(Number(e.target.value))}>
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+                <button type="button" disabled={supplierLoading} onClick={() => setSupplierRefresh((v) => v + 1)}>
+                  {supplierLoading ? "Đang tra cứu..." : "Tra cứu Kinguin"}
+                </button>
+                {supplierError && <p role="status">{supplierError}</p>}
+                {(supplierQuote?.mode === "Mock" || mockRequest) && (
+                  <div aria-live="polite">
+                    <p className="muted">Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật.</p>
+                    <button type="button" disabled={mockBusy || !!mockResult || supplierQuote?.mode !== "Mock"} onClick={submitMockOrder}>
+                      {mockRequest ? "Gửi lại cùng Request ID" : "Mô phỏng thanh toán và nhập key"}
+                    </button>
+                    {mockRequest && <>
+                      <p>Request ID: {mockRequest.id}</p>
+                      <button type="button" disabled={mockBusy} onClick={refreshMockOrder}>Kiểm tra trạng thái</button>
+                      <button type="button" disabled={mockBusy || mockResult?.status === "MOCK_PENDING" || !mockResult} onClick={() => { setMockRequest(null); setMockResult(null); setMockError(""); }}>Đơn thử nghiệm mới</button>
+                    </>}
+                    {mockResult && <p>{mockResult.status} · {mockResult.quantity} key · {mockResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
+                    {mockError && <p role="status">{mockError}</p>}
+                  </div>
+                )}
+
+                {supplierQuote && (
+                  <div aria-live="polite">
+                    <p>{supplierQuote.mode} · {supplierQuote.supplierProductId}</p>
+                    {supplierQuote.quote ? <>
+                      <p>Giá tham khảo: {supplierQuote.quote.price.toFixed(2)} {supplierQuote.currency}</p>
+                      <p>Text key khả dụng theo báo giá: {supplierQuote.quote.textQty}</p>
+                      <p>{supplierQuote.canFulfill ? "Đủ theo báo giá" : "Không đủ theo báo giá"}</p>
+                      {supplierQuote.estimatedCost !== null && <p>Ước tính: {supplierQuote.estimatedCost.toFixed(2)} {supplierQuote.currency}</p>}
+                    </> : <p>Không tìm thấy sản phẩm nhà cung cấp.</p>}
+                    <p className="muted">Không bảo đảm giá hoặc tồn kho khi mua thực tế.</p>
+                  </div>
+                )}
+              </section>
             )}
 
             {!selectedProduct && productId && (

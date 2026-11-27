@@ -1,4 +1,3 @@
-
 {
   "name": "Digital License Marketplace",
   "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
@@ -14,7 +13,8 @@
     5173,
     8000,
     8081,
-    15672
+    15672,
+    8002
   ],
   "portsAttributes": {
     "5173": {
@@ -32,7 +32,12 @@
     "15672": {
       "label": "RabbitMQ",
       "onAutoForward": "silent"
+    },
+    "8002": {
+      "label": "Jira Webhook",
+      "onAutoForward": "notify"
     }
   },
-  "remoteUser": "vscode"
+  "remoteUser": "vscode",
+  "postStartCommand": "bash scripts/fix-codespaces-network.sh --if-running"
 }

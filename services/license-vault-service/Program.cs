@@ -1,4 +1,5 @@
 using Marketplace.Shared.Security;
+using LicenseVault.Api.Infrastructure.Kinguin;
 
 using LicenseVault.Api.Application.Interfaces;
 using LicenseVault.Api.Application.Services;
@@ -33,6 +34,16 @@ builder.Services.AddHttpClient<
         catalogUrl.TrimEnd('/') + "/");
 
     client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// Supplier quotes only; no purchase or fulfillment capability.
+builder.Services.AddHttpClient<KinguinCatalog>(client =>
+{
+    client.BaseAddress = new Uri("https://gateway.sandbox.kinguin.net/esa/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false
 });
 
 // Customer order verification
@@ -102,6 +113,7 @@ builder.Services.AddHostedService<OrderPaidConsumer>();
 builder.Services.AddSingleton<RabbitMqPublisher>();
 
 builder.Services.AddHostedService<AllocationOutboxWorker>();
+builder.Services.AddHostedService<KinguinMockWorkflowWorker>();
 
 var app = builder.Build();
 

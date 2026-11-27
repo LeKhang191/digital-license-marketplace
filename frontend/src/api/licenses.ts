@@ -91,3 +91,44 @@ export function revealMyLicense(id: string) {
     },
   );
 }
+
+export interface KinguinQuote {
+  mode: "Mock" | "Sandbox";
+  supplierProductId: string;
+  currency: string;
+  inStock: boolean;
+  quote: { price: number; textQty: number; totalQty: number } | null;
+  quantity: number;
+  canFulfill: boolean;
+  estimatedCost: number | null;
+  previewOnly: boolean;
+}
+
+export function getKinguinQuote(productId: string, quantity: number, signal?: AbortSignal) {
+  return api<KinguinQuote>(
+    `/licenses/supplier/kinguin/${encodeURIComponent(productId)}?quantity=${quantity}`,
+    { auth: true, cache: "no-store", signal },
+  );
+}
+
+export interface KinguinMockOrder {
+  requestId: string;
+  productId: string;
+  quantity: number;
+  totalCost: number;
+  status: "MOCK_PENDING" | "MOCK_FULFILLED" | "MOCK_OUT_OF_STOCK";
+  simulated: boolean;
+  charged: boolean;
+}
+
+export function enqueueKinguinMockOrder(requestId: string, productId: string, quantity: number) {
+  return api<KinguinMockOrder>("/licenses/supplier/kinguin/mock-orders/async", {
+    method: "POST", auth: true, body: JSON.stringify({ requestId, productId, quantity }),
+  });
+}
+
+export function getKinguinMockOrder(requestId: string) {
+  return api<KinguinMockOrder>(`/licenses/supplier/kinguin/mock-orders/${encodeURIComponent(requestId)}`, {
+    auth: true, cache: "no-store",
+  });
+}

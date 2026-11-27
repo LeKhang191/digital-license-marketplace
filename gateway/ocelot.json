@@ -44,6 +44,13 @@
       ]
     },
     {
+      "DownstreamPathTemplate": "/api/support/webhooks/jira",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "support", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/support/webhooks/jira",
+      "UpstreamHttpMethod": ["POST"]
+    },
+    {
       "DownstreamPathTemplate": "/api/support/tickets/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [

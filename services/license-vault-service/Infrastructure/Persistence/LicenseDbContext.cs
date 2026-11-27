@@ -20,9 +20,23 @@ public sealed class LicenseDbContext(
     public DbSet<LicenseReplacement> LicenseReplacements =>
         Set<LicenseReplacement>();
 
+    public DbSet<KinguinMockOrder> KinguinMockOrders => Set<KinguinMockOrder>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        var mock = modelBuilder.Entity<KinguinMockOrder>();
+        mock.ToTable("kinguin_mock_orders");
+        mock.HasKey(x => x.Id);
+        mock.Property(x => x.Id).ValueGeneratedNever();
+        mock.Property(x => x.SupplierProductId).HasMaxLength(128).IsRequired();
+        mock.Property(x => x.OwnerId).HasMaxLength(255).IsRequired();
+        mock.Property(x => x.TotalCost).HasPrecision(18, 2);
+        mock.Property(x => x.EncryptedKeys).IsRequired();
+        mock.HasIndex(x => x.SupplierProductId);
+        mock.Property(x => x.Status).HasMaxLength(32).IsRequired();
+        mock.HasIndex(x => new { x.Status, x.NextPublishAtUtc });
 
         var guard = modelBuilder.Entity<LicenseRefundGuard>();
 

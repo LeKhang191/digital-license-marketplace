@@ -121,6 +121,11 @@ services:
       InternalService__Key: "${PAYMENT_INTERNAL_KEY:?PAYMENT_INTERNAL_KEY required}"
       ConnectionStrings__LicenseDb: "Host=postgres;Port=5432;Database=license_db;Username=app;Password=${DB_PASSWORD}"
       Services__CatalogUrl: "http://catalog:8080"
+      Kinguin__Mode: "${KINGUIN_MODE:-Disabled}"
+      Kinguin__ApiKey: "${KINGUIN_SANDBOX_API_KEY:-}"
+      Kinguin__LocalProductId: "${KINGUIN_LOCAL_PRODUCT_ID:-}"
+      Kinguin__ProductId: "${KINGUIN_PRODUCT_ID:-}"
+      Kinguin__ProductMappings: "${KINGUIN_PRODUCT_MAPPINGS:-}"
 
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
       Keycloak__Issuer: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}/realms/marketplace"
@@ -221,6 +226,7 @@ services:
       dockerfile: services/support-service/Dockerfile
 
     environment:
+      Jira__WebhookSecret: "${JIRA_WEBHOOK_SECRET:-}"
       Jira__Enabled: "${JIRA_ENABLED:-false}"
       Jira__BaseUrl: "${JIRA_BASE_URL:-}"
       Jira__Email: "${JIRA_EMAIL:-}"

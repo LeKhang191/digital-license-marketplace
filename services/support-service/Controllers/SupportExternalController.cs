@@ -22,9 +22,9 @@ public sealed class SupportExternalController(SupportDbContext db, JiraClient ji
         link.TicketId, link.State, link.IssueId, link.IssueKey, link.ExternalStatus,
         comments = JsonSerializer.Deserialize<JsonElement>(link.CommentsJson), link.SyncedAtUtc
     };
-    private static bool RemoteFailure(Exception ex) => ex is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException or KeyNotFoundException;
+    internal static bool RemoteFailure(Exception ex) => ex is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException or KeyNotFoundException;
     private IActionResult Unavailable() => StatusCode(503, new { code = "JIRA_UNAVAILABLE" });
-    private static void Attach(ExternalSupportLink link, JsonElement data)
+    internal static void Attach(ExternalSupportLink link, JsonElement data)
     {
         var issueId = data.GetProperty("issueId").ToString();
         var issueKey = data.GetProperty("issueKey").GetString();
@@ -87,15 +87,23 @@ public sealed class SupportExternalController(SupportDbContext db, JiraClient ji
         if (!jira.Ready) return Unavailable();
         try
         {
-            var data = await jira.Read(link.IssueId, ct);
-            var comments = await jira.Comments(link.IssueId, ct);
-            if (data.GetProperty("issueId").ToString() != link.IssueId) throw new JsonException("Unexpected issue");
-            Attach(link, data); link.CommentsJson = comments; link.SyncedAtUtc = DateTime.UtcNow;
-            await db.SaveChangesAsync(ct);
+            await RefreshLink(db, jira, link, ct);
             return Ok(View(link));
         }
         catch (DbUpdateConcurrencyException) { return Conflict(new { code = "JIRA_SYNC_CONFLICT" }); }
         catch (Exception ex) when (RemoteFailure(ex)) { return Unavailable(); }
+    }
+
+    internal static async Task RefreshLink(SupportDbContext db, JiraClient jira, ExternalSupportLink link, CancellationToken ct)
+    {
+        var issueId = link.IssueId ?? throw new InvalidOperationException("Missing Jira issue");
+        var data = await jira.Read(issueId, ct);
+        var comments = await jira.Comments(issueId, ct);
+        if (data.GetProperty("issueId").ToString() != issueId) throw new JsonException("Unexpected issue");
+        Attach(link, data);
+        link.CommentsJson = comments;
+        link.SyncedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
     }
 
     public sealed record ReconcileRequest(string IssueKey);

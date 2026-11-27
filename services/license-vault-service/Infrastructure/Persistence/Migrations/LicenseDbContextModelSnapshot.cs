@@ -22,6 +22,24 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.KinguinMockOrder", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<string>("EncryptedKeys").IsRequired().HasColumnType("text");
+                    b.Property<string>("OwnerId").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)");
+                    b.Property<Guid>("ProductId").HasColumnType("uuid");
+                    b.Property<int>("Quantity").HasColumnType("integer");
+                    b.Property<string>("SupplierProductId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
+                    b.Property<decimal>("TotalCost").HasPrecision(18, 2).HasColumnType("numeric(18,2)");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+                    b.Property<DateTime?>("NextPublishAtUtc").HasColumnType("timestamp with time zone");
+                    b.HasKey("Id");
+                    b.HasIndex("SupplierProductId");
+                    b.HasIndex("Status", "NextPublishAtUtc");
+                    b.ToTable("kinguin_mock_orders", (string)null);
+                });
+
             modelBuilder.Entity("LicenseVault.Api.Domain.Entities.AllocationResult", b =>
                 {
                     b.Property<Guid>("OrderId")

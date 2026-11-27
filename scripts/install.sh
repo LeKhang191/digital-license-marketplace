@@ -85,6 +85,7 @@ docker compose config --quiet
 echo "[1/4] Starting infrastructure..."
 
 docker compose up -d --wait postgres
+bash scripts/fix-codespaces-network.sh
 docker compose up -d rabbitmq keycloak
 
 if [[ "${CODESPACES:-false}" == "true" ]]; then

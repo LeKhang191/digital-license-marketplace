@@ -18,6 +18,10 @@ fi
 POSTGRES_ID=$(docker compose ps -q postgres)
 
 if [[ -z "$POSTGRES_ID" ]]; then
+    if [[ "${1:-}" == "--if-running" ]]; then
+        echo "[Skip] PostgreSQL is not running. Run installer first."
+        exit 0
+    fi
     echo "[ERROR] Start PostgreSQL first."
     exit 1
 fi
@@ -70,12 +74,18 @@ ensure_forward_rule() {
     fi
 }
 
-# Allow outbound connections from the project bridge.
+# Allow DNS and HTTPS outbound.
 ensure_forward_rule \
     -i "$BRIDGE" -o "$OUT_IF" \
-    -m conntrack \
-    --ctstate NEW,ESTABLISHED,RELATED \
-    -j ACCEPT
+    -p udp --dport 53 -j ACCEPT
+
+ensure_forward_rule \
+    -i "$BRIDGE" -o "$OUT_IF" \
+    -p tcp --dport 53 -j ACCEPT
+
+ensure_forward_rule \
+    -i "$BRIDGE" -o "$OUT_IF" \
+    -p tcp --dport 443 -j ACCEPT
 
 # Allow responses to existing outbound connections.
 ensure_forward_rule \

@@ -199,6 +199,12 @@ export function OrdersPage() {
                 >
                   Xem chứng từ
                 </button>
+                <Link
+                  className="btn btn-secondary"
+                  to={`/support?orderId=${encodeURIComponent(o.id)}`}
+                >
+                  Hỗ trợ / Hoàn tiền
+                </Link>
               </div>
             )}
 
@@ -208,14 +214,21 @@ export function OrdersPage() {
                   Đã thanh toán. Đơn hàng đang được xử lý.
                   Vui lòng không thanh toán lại.
                 </p>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ marginTop: 8 }}
-                  onClick={() => setReceipt(buildOrderReceipt(o, productName))}
-                >
-                  Xem chứng từ
-                </button>
+                <div className="supplier-actions" style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setReceipt(buildOrderReceipt(o, productName))}
+                  >
+                    Xem chứng từ
+                  </button>
+                  <Link
+                    className="btn btn-secondary"
+                    to={`/support?category=KEY_NOT_RECEIVED&orderId=${encodeURIComponent(o.id)}`}
+                  >
+                    Gửi phiếu hỗ trợ
+                  </Link>
+                </div>
               </div>
             )}
 

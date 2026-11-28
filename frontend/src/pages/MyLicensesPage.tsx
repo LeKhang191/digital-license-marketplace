@@ -13,10 +13,15 @@ function LicenseCard({
   name: string;
 }) {
   const [key, setKey] = useState<string | null>(null);
+  const [revealedAt, setRevealedAt] = useState<string | null>(
+    item.revealedAtUtc ?? null,
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const confirmDialog = useRef<HTMLDialogElement>(null);
+
+  const isRevealed = Boolean(revealedAt || item.isRevealed || key !== null);
 
   useEffect(() => {
     const d = confirmDialog.current;
@@ -34,6 +39,7 @@ function LicenseCard({
     try {
       const result = await revealMyLicense(item.id);
       setKey(result.licenseKey);
+      setRevealedAt(result.revealedAtUtc ?? new Date().toISOString());
     } catch (e) {
       setMessage(
         e instanceof Error
@@ -68,10 +74,27 @@ function LicenseCard({
 
   return (
     <div className="card">
-      <h2>{name}</h2>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <h2 style={{ margin: 0 }}>{name}</h2>
+        <span
+          className={
+            isRevealed
+              ? "license-status assigned"
+              : "license-status available"
+          }
+        >
+          {isRevealed ? "Đã xem key" : "Chưa mở key · Có thể yêu cầu hoàn tiền"}
+        </span>
+      </div>
 
-      <p className="muted">
-        Đơn hàng: {item.orderId.slice(0, 8)}
+      <p className="muted" style={{ marginTop: 8 }}>
+        Đơn hàng: <code>{item.orderId.slice(0, 8)}</code>
+        {revealedAt && (
+          <>
+            {" "}· Xem key lúc:{" "}
+            {new Date(revealedAt).toLocaleString("vi-VN")}
+          </>
+        )}
       </p>
 
       <p className="muted">
@@ -101,6 +124,22 @@ function LicenseCard({
         >
           Sao chép
         </button>
+
+        {isRevealed ? (
+          <Link
+            className="btn btn-secondary"
+            to={`/support?category=INVALID_KEY&orderId=${encodeURIComponent(item.orderId)}&licenseId=${encodeURIComponent(item.id)}`}
+          >
+            Báo key lỗi / Hoàn tiền
+          </Link>
+        ) : (
+          <Link
+            className="btn btn-secondary"
+            to={`/support?category=REFUND_REQUEST&orderId=${encodeURIComponent(item.orderId)}`}
+          >
+            Yêu cầu hoàn tiền (chưa mở key)
+          </Link>
+        )}
       </div>
 
       {message && <p role="status">{message}</p>}

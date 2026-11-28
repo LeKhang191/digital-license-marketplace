@@ -290,6 +290,67 @@ namespace PaymentService.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PaymentService.Domain.Entities.WalletTopUp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentRef")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("VnpPayDate")
+                        .HasMaxLength(14)
+                        .HasColumnType("character varying(14)");
+
+                    b.Property<string>("VnpTransactionNo")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentRef")
+                        .IsUnique();
+
+                    b.HasIndex("VnpTransactionNo")
+                        .IsUnique()
+                        .HasFilter("\"VnpTransactionNo\" IS NOT NULL");
+
+                    b.HasIndex("CustomerId", "CreatedAtUtc");
+
+                    b.ToTable("wallet_topups", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_wallet_topups_amount", "\"Amount\" > 0");
+
+                            t.HasCheckConstraint("CK_wallet_topups_status", "\"Status\" IN ('PENDING', 'SUCCEEDED', 'FAILED')");
+                        });
+                });
+
             modelBuilder.Entity("PaymentService.Domain.Entities.WalletTransaction", b =>
                 {
                     b.Property<Guid>("Id")

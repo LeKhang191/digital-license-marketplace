@@ -18,6 +18,7 @@ import { PaymentResultPage } from "./pages/PaymentResultPage";
 import { AdminPage } from "./pages/AdminPage";
 import { LicensePage } from "./pages/LicensePage";
 import { TransactionsPage } from "./pages/TransactionsPage";
+import { SupportPage } from "./pages/SupportPage";
 import { ForbiddenPage } from "./pages/ForbiddenPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
@@ -112,6 +113,24 @@ export default function App() {
               allowedRoles={[Roles.TRANSACTION_AUDITOR]}
             >
               <TransactionsPage />
+            </RoleGuard>
+          }
+        />
+
+        {/* Support Center (Customer + Staff roles) */}
+
+        <Route
+          path="/support"
+          element={
+            <RoleGuard
+              allowedRoles={[
+                Roles.CUSTOMER,
+                Roles.LICENSE_COORDINATOR,
+                Roles.TRANSACTION_AUDITOR,
+                Roles.CATALOG_MANAGER,
+              ]}
+            >
+              <SupportPage />
             </RoleGuard>
           }
         />

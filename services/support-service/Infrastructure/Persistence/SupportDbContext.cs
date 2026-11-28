@@ -39,6 +39,8 @@ public sealed class SupportDbContext(
         ticket.Property(x => x.Status).HasMaxLength(20);
         ticket.Property(x => x.AssignedRole).HasMaxLength(32);
         ticket.Property(x => x.HandledBy).HasMaxLength(64);
+        ticket.Property(x => x.ResolutionOutcome).HasMaxLength(32);
+        ticket.Property(x => x.RejectionReason).HasMaxLength(500);
 
         ticket.Property(x => x.Version).IsConcurrencyToken();
 

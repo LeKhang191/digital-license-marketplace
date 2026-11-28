@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -11,7 +10,7 @@ using SupportService.Infrastructure.Persistence;
 namespace SupportService.Controllers;
 
 [ApiController]
-[Authorize(Roles = "license_coordinator")]
+[Authorize(Roles = "license_coordinator,transaction_auditor")]
 [Route("api/support/tickets/{id:guid}/refund")]
 [ResponseCache(
     NoStore = true,
@@ -29,20 +28,34 @@ public sealed class SupportRefundsController(
         int Status,
         string Body);
 
+    private static bool IsDefectTicket(SupportTicket ticket)
+        => ticket.AssignedRole == "license_coordinator" &&
+           ticket.OrderId.HasValue &&
+           ticket.LicenseId is not null &&
+           ticket.LicenseId != Guid.Empty &&
+           ticket.Category is ("INVALID_KEY" or "KEY_ALREADY_USED");
+
+    private static bool IsUnrevealedTicket(SupportTicket ticket)
+        => ticket.AssignedRole == "transaction_auditor" &&
+           ticket.OrderId.HasValue &&
+           ticket.OrderId != Guid.Empty &&
+           ticket.Category == "REFUND_REQUEST";
+
     private async Task<OrderReply> CallOrderAsync(
         SupportTicket ticket,
         bool approve,
         CancellationToken ct)
     {
-        var path =
-            $"api/internal/support/tickets/{ticket.Id:D}/refund";
+        var unrevealed = IsUnrevealedTicket(ticket);
+        var path = unrevealed
+            ? $"api/internal/support/tickets/{ticket.Id:D}/refund/unrevealed"
+            : $"api/internal/support/tickets/{ticket.Id:D}/refund";
 
         if (!approve)
         {
-            path +=
-                $"?orderId={ticket.OrderId:D}" +
-                $"&licenseId={ticket.LicenseId:D}" +
-                $"&customerId={Uri.EscapeDataString(ticket.CustomerId)}";
+            path += unrevealed
+                ? $"?orderId={ticket.OrderId:D}&customerId={Uri.EscapeDataString(ticket.CustomerId)}"
+                : $"?orderId={ticket.OrderId:D}&licenseId={ticket.LicenseId:D}&customerId={Uri.EscapeDataString(ticket.CustomerId)}";
         }
 
         using var request = new HttpRequestMessage(
@@ -69,14 +82,22 @@ public sealed class SupportRefundsController(
 
         if (approve)
         {
-            request.Content = JsonContent.Create(new
-            {
-                ticket.Id,
-                ticket.OrderId,
-                ticket.LicenseId,
-                ticket.CustomerId,
-                ticket.HandledBy
-            });
+            request.Content = unrevealed
+                ? JsonContent.Create(new
+                {
+                    ticket.Id,
+                    OrderId = ticket.OrderId!.Value,
+                    ticket.CustomerId,
+                    ticket.HandledBy
+                })
+                : JsonContent.Create(new
+                {
+                    ticket.Id,
+                    OrderId = ticket.OrderId!.Value,
+                    ticket.LicenseId,
+                    ticket.CustomerId,
+                    ticket.HandledBy
+                });
         }
 
         using var response = await clients
@@ -131,16 +152,13 @@ public sealed class SupportRefundsController(
         var ticket = tickets.SingleOrDefault();
 
         if (ticket is null ||
-            ticket.AssignedRole != "license_coordinator" ||
+            !User.IsInRole(ticket.AssignedRole) ||
             ticket.HandledBy != UserId)
         {
             return NotFound();
         }
 
-        if (ticket.LicenseId is null ||
-            ticket.LicenseId == Guid.Empty ||
-            ticket.Category is not
-                ("INVALID_KEY" or "KEY_ALREADY_USED"))
+        if (!IsDefectTicket(ticket) && !IsUnrevealedTicket(ticket))
         {
             return Conflict(new
             {
@@ -150,8 +168,7 @@ public sealed class SupportRefundsController(
 
         try
         {
-            var eligible =
-                ticket.Status == "IN_PROGRESS";
+            var eligible = ticket.Status == "IN_PROGRESS";
 
             // For an already resolved ticket, allow only
             // retrieval of an existing refund operation.
@@ -169,8 +186,7 @@ public sealed class SupportRefundsController(
             if (reply.Status is not (200 or 202))
                 return Forward(reply);
 
-            using var json =
-                JsonDocument.Parse(reply.Body);
+            using var json = JsonDocument.Parse(reply.Body);
 
             if (!json.RootElement.TryGetProperty(
                     "requestId", out var requestIdElement) ||
@@ -178,18 +194,18 @@ public sealed class SupportRefundsController(
                     out var requestId) ||
                 requestId == Guid.Empty)
             {
-                throw new JsonException(
-                    "Invalid refund request ID");
+                throw new JsonException("Invalid refund request ID");
             }
 
-            var content =
-                $"Defective license refund approved. Request: {requestId:D}";
+            var content = IsUnrevealedTicket(ticket)
+                ? $"Unrevealed order refund approved. Request: {requestId:D}"
+                : $"Defective license refund approved. Request: {requestId:D}";
 
             var recorded = await db.SupportMessages
                 .AnyAsync(x =>
                     x.TicketId == ticket.Id &&
                     x.SenderId == UserId &&
-                    x.SenderRole == "license_coordinator" &&
+                    x.SenderRole == ticket.AssignedRole &&
                     x.Content == content, ct);
 
             if (!recorded)
@@ -199,10 +215,11 @@ public sealed class SupportRefundsController(
                     {
                         TicketId = ticket.Id,
                         SenderId = UserId!,
-                        SenderRole = "license_coordinator",
+                        SenderRole = ticket.AssignedRole,
                         Content = content
                     });
 
+                ticket.ResolutionOutcome = "APPROVED_REFUND";
                 ticket.Version = Guid.NewGuid();
                 ticket.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -233,22 +250,93 @@ public sealed class SupportRefundsController(
             return Unauthorized();
 
         var ticket = await db.SupportTickets
-            .AsNoTracking()
             .SingleOrDefaultAsync(x =>
                 x.Id == id &&
-                x.AssignedRole == "license_coordinator" &&
                 x.HandledBy == UserId, ct);
 
         if (ticket is null ||
-            ticket.LicenseId is null)
+            !User.IsInRole(ticket.AssignedRole) ||
+            (!IsDefectTicket(ticket) && !IsUnrevealedTicket(ticket)))
         {
             return NotFound();
         }
 
         try
         {
-            return Forward(
-                await CallOrderAsync(ticket, false, ct));
+            var reply = await CallOrderAsync(ticket, false, ct);
+
+            if (reply.Status == 200 && !string.IsNullOrWhiteSpace(reply.Body))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(reply.Body);
+                    var opStatus = doc.RootElement.TryGetProperty("status", out var stEl)
+                        ? stEl.GetString()
+                        : null;
+                    var rejectionCode = doc.RootElement.TryGetProperty("rejectionCode", out var rcEl)
+                        ? rcEl.GetString()
+                        : null;
+
+                    if (opStatus == "REJECTED" && ticket.ResolutionOutcome != "REJECTED")
+                    {
+                        var reason = rejectionCode switch
+                        {
+                            "LICENSE_ALREADY_REVEALED" =>
+                                "Hệ thống tự động từ chối: Key bản quyền đã được mở xem trước khi hoàn tiền.",
+                            "ORDER_ALREADY_COMPENSATED" =>
+                                "Hệ thống tự động từ chối: Đơn hàng đã được đổi key mới trước đó.",
+                            "DEFECT_REFUND_NOT_ELIGIBLE" =>
+                                "Hệ thống tự động từ chối: Chỉ hỗ trợ hoàn toàn bộ đơn 1 key lỗi đã mở xem (đơn nhiều key vui lòng dùng Đổi key mới).",
+                            _ => $"Hệ thống tự động từ chối hoàn tiền ({rejectionCode ?? "NOT_ELIGIBLE"})."
+                        };
+
+                        ticket.ResolutionOutcome = "REJECTED";
+                        ticket.RejectionReason = reason;
+                        if (ticket.Status == "IN_PROGRESS")
+                            ticket.Status = "RESOLVED";
+                        ticket.Version = Guid.NewGuid();
+                        ticket.UpdatedAtUtc = DateTime.UtcNow;
+
+                        db.SupportMessages.Add(new SupportMessage
+                        {
+                            TicketId = ticket.Id,
+                            SenderId = UserId!,
+                            SenderRole = ticket.AssignedRole,
+                            Content = $"[TỰ ĐỘNG TỪ CHỐI HOÀN TIỀN] {reason}"
+                        });
+
+                        await db.SaveChangesAsync(ct);
+                    }
+                    else if (opStatus == "COMPLETED" && ticket.Status == "IN_PROGRESS")
+                    {
+                        ticket.ResolutionOutcome = "APPROVED_REFUND";
+                        ticket.Status = "RESOLVED";
+                        ticket.Version = Guid.NewGuid();
+                        ticket.UpdatedAtUtc = DateTime.UtcNow;
+
+                        var doneContent = "[HOÀN TIỀN THÀNH CÔNG] Tiền đã được tự động hoàn vào Ví DLM của khách hàng.";
+                        if (!await db.SupportMessages.AnyAsync(
+                                m => m.TicketId == ticket.Id && m.Content == doneContent, ct))
+                        {
+                            db.SupportMessages.Add(new SupportMessage
+                            {
+                                TicketId = ticket.Id,
+                                SenderId = UserId!,
+                                SenderRole = ticket.AssignedRole,
+                                Content = doneContent
+                            });
+                        }
+
+                        await db.SaveChangesAsync(ct);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Ignore malformed sync preview and forward raw response.
+                }
+            }
+
+            return Forward(reply);
         }
         catch (Exception ex) when (
             ex is HttpRequestException or JsonException ||

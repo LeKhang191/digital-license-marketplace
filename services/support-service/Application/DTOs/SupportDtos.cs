@@ -1,7 +1,7 @@
 namespace SupportService.Application.DTOs;
 
 public sealed record CreateSupportTicketRequest(
-    Guid OrderId,
+    Guid? OrderId,
     Guid? LicenseId,
     string Category,
     string Subject,
@@ -14,4 +14,8 @@ public sealed record AddSupportMessageRequest(
 
 public sealed record UpdateSupportStatusRequest(
     string Status
+);
+
+public sealed record RejectSupportTicketRequest(
+    string Reason
 );

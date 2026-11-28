@@ -52,6 +52,7 @@ public sealed class ReplacementEligibilityController(
         if (ticket.Status != "IN_PROGRESS" ||
             ticket.Category is not
                 ("INVALID_KEY" or "KEY_ALREADY_USED") ||
+            ticket.OrderId is null ||
             ticket.LicenseId is null)
         {
             return Conflict(new
@@ -60,13 +61,15 @@ public sealed class ReplacementEligibilityController(
             });
         }
 
+        var orderId = ticket.OrderId.Value;
+
         OrderData? order;
 
         try
         {
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                $"api/internal/support/orders/{ticket.OrderId:D}"
+                $"api/internal/support/orders/{orderId:D}"
                 + $"?customerId={Uri.EscapeDataString(ticket.CustomerId)}");
 
             if (!AuthenticationHeaderValue.TryParse(

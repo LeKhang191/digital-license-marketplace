@@ -102,6 +102,34 @@
       ]
     },
     {
+      "DownstreamPathTemplate": "/api/wallet/me/topups/{paymentRef}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "payment",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/wallet/me/topups/{paymentRef}",
+      "UpstreamHttpMethod": [
+        "GET"
+      ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/wallet/me/topups",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "payment",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/wallet/me/topups",
+      "UpstreamHttpMethod": [
+        "POST"
+      ]
+    },
+    {
       "DownstreamPathTemplate": "/api/wallet/me/transactions",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [

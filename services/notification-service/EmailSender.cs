@@ -81,6 +81,30 @@ public sealed class EmailSender(IConfiguration config)
                 Digital License Marketplace
                 """;
         }
+        else if (notification.Type == "REFUND_REJECTED")
+        {
+            var reason = string.IsNullOrWhiteSpace(notification.Detail)
+                ? "Yêu cầu không đáp ứng điều kiện hoàn tiền theo chính sách."
+                : notification.Detail;
+
+            message.Subject =
+                "Thông báo kết quả yêu cầu hoàn tiền / hỗ trợ";
+
+            message.Body = $"""
+                Xin chào,
+
+                Yêu cầu hoàn tiền cho đơn hàng của bạn không được chấp nhận.
+
+                Mã đơn hàng: {notification.OrderId}
+                Giá trị đơn hàng: {amount} VND
+                Lý do: {reason}
+
+                Nếu bạn cần trao đổi thêm hoặc cung cấp bằng chứng bổ sung,
+                vui lòng đăng nhập Digital License Marketplace và kiểm tra mục Hỗ trợ.
+
+                Digital License Marketplace
+                """;
+        }
         else
         {
             throw new InvalidDataException(

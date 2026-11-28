@@ -33,13 +33,18 @@ export function Navbar() {
   useEffect(() => { setSearch(params.get("q") ?? ""); }, [params]);
   useEffect(() => { if (modal && !dialog.current?.open) dialog.current?.showModal(); else if (!modal && dialog.current?.open) dialog.current.close(); }, [modal]);
   const staffView = authenticated && (isStaff || isAdmin);
-  const staffLinks = [ ...(isCatalogManager ? [["/admin", "Quản lý sản phẩm"]] : []), ...(isLicenseCoordinator ? [["/licenses", "Kho license"], ["/licenses/import", "Nhập kho"], ["/licenses/suppliers", "Nhà cung cấp"], ["/licenses/history", "Lịch sử"]] : []), ...(isTransactionAuditor ? [["/transactions", "Giao dịch"]] : []) ];
+  const staffLinks = [
+    ...(isCatalogManager ? [["/admin", "Quản lý sản phẩm"]] : []),
+    ...(isLicenseCoordinator ? [["/licenses", "Kho license"], ["/licenses/import", "Nhập kho"], ["/licenses/suppliers", "Nhà cung cấp"], ["/licenses/history", "Lịch sử"]] : []),
+    ...(isTransactionAuditor ? [["/transactions", "Giao dịch"]] : []),
+    ...(isStaff ? [["/support", "Hỗ trợ"]] : []),
+  ];
   const tab = location.pathname === "/" ? params.get("category") ?? "" : null;
   return <><nav className={staffView ? "navbar staff-navbar" : "navbar"}><div className="nav-inner">
     <Link to="/" className="brand"><span className="brand-mark">D</span> DIGITAL KEY</Link>
     {staffView ? <div className="nav-tabs" aria-label="Quản lý">{staffLinks.map(([path,label]) => <Link key={path} to={path} className={location.pathname === path ? "active" : ""} aria-current={location.pathname === path ? "page" : undefined}>{label}</Link>)}</div> : <div className="nav-tabs" aria-label="Danh mục">{[["", "Trang chủ"], ["Game", "Game"], ["Software", "Tạp hóa"]].map(([value,label]) => <Link key={value} className={tab === value ? "active" : ""} aria-current={tab === value ? "page" : undefined} to={value ? `/?category=${value}` : "/"}>{label}</Link>)}</div>}
     <div className="nav-actions">{ready && !staffView && <><form className="nav-search" onSubmit={e => { e.preventDefault(); const q = new URLSearchParams(); if (tab) q.set("category",tab); if(search.trim()) q.set("q",search.trim()); navigate(`/?${q}`); }}><input aria-label="Tìm sản phẩm" placeholder="⌕ Tìm game..." value={search} onChange={e=>setSearch(e.target.value)} /></form>
-    <button className="pill faq" onClick={()=>setModal("faq")}>FAQ</button><button className="pill guide" onClick={()=>setModal("guide")}>Hướng dẫn mua key</button><Link to="/cart" className="pill">Giỏ hàng{totalCount > 0 ? ` (${totalCount})` : ""}</Link></>}
+    <button className="pill faq" onClick={()=>setModal("faq")}>FAQ</button><button className="pill guide" onClick={()=>setModal("guide")}>Hướng dẫn mua key</button>{authenticated && isCustomer && <Link to="/support" className="pill">Hỗ trợ</Link>}<Link to="/cart" className="pill">Giỏ hàng{totalCount > 0 ? ` (${totalCount})` : ""}</Link></>}
     <div className="nav-account-slot">
       {!ready ? <span className="muted nav-loading" role="status">Đang tải…</span> : authenticated ? (
         <details className="nav-account" ref={account} onKeyDown={e => {
@@ -50,11 +55,12 @@ export function Navbar() {
         }}>
           <summary className="pill"><span className="account-name">{username || "Tài khoản"}</span><span aria-hidden="true">▾</span></summary>
           <div className="account-links">
-            {isCustomer && <><Link to="/account">Ví &amp; Cài đặt{walletBalance !== null ? ` (${vnd(walletBalance)})` : ""}</Link><Link to="/orders">Đơn hàng</Link><Link to="/my-licenses">License của tôi</Link></>}
+            {isCustomer && <><Link to="/account">Ví &amp; Cài đặt{walletBalance !== null ? ` (${vnd(walletBalance)})` : ""}</Link><Link to="/orders">Đơn hàng</Link><Link to="/my-licenses">License của tôi</Link><Link to="/support">Hỗ trợ &amp; Hoàn tiền</Link></>}
             {!isCustomer && <Link to="/account">Cài đặt tài khoản</Link>}
             {isCatalogManager && <Link to="/admin">Quản lý sản phẩm</Link>}
             {isLicenseCoordinator && <><Link to="/licenses">Kho license</Link><Link to="/licenses/import">Nhập kho</Link><Link to="/licenses/suppliers">Nhà cung cấp</Link><Link to="/licenses/history">Lịch sử</Link></>}
             {isTransactionAuditor && <Link to="/transactions">Giao dịch</Link>}
+            {isStaff && <Link to="/support">Hộp thư Hỗ trợ</Link>}
             <button type="button" onClick={logout}>Đăng xuất</button>
           </div>
         </details>

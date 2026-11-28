@@ -27,6 +27,8 @@ public sealed class NotificationMessage
     public DateTime? SentAtUtc { get; set; }
 
     public string? LastError { get; set; }
+
+    public string? Detail { get; set; }
 }
 
 public sealed class NotificationDbContext(
@@ -73,5 +75,8 @@ public sealed class NotificationDbContext(
 
         entity.Property(x => x.LastError)
             .HasMaxLength(100);
+
+        entity.Property(x => x.Detail)
+            .HasMaxLength(500);
     }
 }

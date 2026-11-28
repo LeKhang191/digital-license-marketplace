@@ -17,7 +17,9 @@ namespace SupportService.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class SupportController(
     SupportDbContext db,
-    IHttpClientFactory clients
+    IHttpClientFactory clients,
+    IConfiguration config,
+    ILogger<SupportController> log
 ) : ControllerBase
 {
     private string? UserId => User.FindFirst("sub")?.Value;
@@ -31,21 +33,74 @@ public sealed class SupportController(
 
     private bool IsStaff =>
         User.IsInRole("license_coordinator") ||
-        User.IsInRole("transaction_auditor");
+        User.IsInRole("transaction_auditor") ||
+        User.IsInRole("catalog_manager");
 
     private bool CanAccess =>
         !string.IsNullOrWhiteSpace(UserId) &&
         (IsCustomer || IsStaff);
 
-    private static readonly Dictionary<string, string> Categories = new()
-    {
-        ["INVALID_KEY"] = "license_coordinator",
-        ["KEY_ALREADY_USED"] = "license_coordinator",
-        ["KEY_NOT_RECEIVED"] = "license_coordinator",
-        ["PAYMENT_ISSUE"] = "transaction_auditor",
-        ["REFUND_REQUEST"] = "transaction_auditor",
-        ["OTHER"] = "transaction_auditor"
-    };
+    public sealed record CategoryMeta(
+        string Code,
+        string Label,
+        string Description,
+        string AssignedRole,
+        string AssignedRoleLabel,
+        bool RequiresOrder,
+        bool RequiresLicense,
+        string RefundMode);
+
+    private static readonly IReadOnlyList<CategoryMeta> CategoryCatalog =
+    [
+        new("REFUND_REQUEST",
+            "Hoàn tiền đơn chưa mở key",
+            "Yêu cầu hoàn tiền về Ví DLM cho đơn hàng đã mua trong vòng 7 ngày và chưa xem key.",
+            "transaction_auditor", "Kiểm toán giao dịch",
+            true, false, "UNREVEALED"),
+        new("INVALID_KEY",
+            "Key lỗi / không kích hoạt được",
+            "Báo cáo key đã xem nhưng không hợp lệ hoặc gặp lỗi khi kích hoạt trên Steam để đổi key mới hoặc hoàn tiền.",
+            "license_coordinator", "Điều phối kho License",
+            true, true, "VERIFIED_DEFECT"),
+        new("KEY_ALREADY_USED",
+            "Key đã có người sử dụng",
+            "Báo cáo key đã bị kích hoạt trước đó (Duplicate Product Code) để xác minh với nhà cung cấp và đổi/hoàn tiền.",
+            "license_coordinator", "Điều phối kho License",
+            true, true, "VERIFIED_DEFECT"),
+        new("KEY_NOT_RECEIVED",
+            "Đã thanh toán nhưng chưa nhận key",
+            "Đơn đã thanh toán thành công nhưng quá lâu chưa được cấp key vào tài khoản.",
+            "license_coordinator", "Điều phối kho License",
+            true, false, "NONE"),
+        new("PAYMENT_ISSUE",
+            "Sự cố thanh toán đơn hàng",
+            "Lỗi khi thanh toán qua VNPay / Ví DLM, trừ tiền nhưng đơn chưa cập nhật.",
+            "transaction_auditor", "Kiểm toán giao dịch",
+            true, false, "NONE"),
+        new("WALLET_TOPUP_ISSUE",
+            "Sự cố nạp tiền Ví DLM (VNPay)",
+            "Đã thanh toán nạp tiền qua VNPay nhưng số dư Ví DLM chưa cộng hoặc sai lệch.",
+            "transaction_auditor", "Kiểm toán giao dịch",
+            false, false, "NONE"),
+        new("WRONG_PRODUCT",
+            "Sai game / sai khu vực kích hoạt",
+            "Phản ánh sản phẩm nhận được không đúng phiên bản, nền tảng hoặc vùng kích hoạt như mô tả.",
+            "catalog_manager", "Quản lý danh mục",
+            true, false, "NONE"),
+        new("CATALOG_INFO",
+            "Hỏi đáp / báo lỗi thông tin sản phẩm",
+            "Hỏi đáp về cấu hình, khu vực kích hoạt hoặc góp ý chỉnh sửa thông tin game trên cửa hàng.",
+            "catalog_manager", "Quản lý danh mục",
+            false, false, "NONE"),
+        new("OTHER",
+            "Vấn đề hỗ trợ khác",
+            "Các yêu cầu hỗ trợ chung khác không thuộc nhóm trên.",
+            "transaction_auditor", "Kiểm toán giao dịch",
+            false, false, "NONE"),
+    ];
+
+    private static readonly Dictionary<string, CategoryMeta> CategoriesByCode =
+        CategoryCatalog.ToDictionary(c => c.Code, StringComparer.Ordinal);
 
     private sealed record OwnedOrderItem(
         Guid Id,
@@ -74,10 +129,12 @@ public sealed class SupportController(
 
         var coordinator = User.IsInRole("license_coordinator");
         var auditor = User.IsInRole("transaction_auditor");
+        var catalog = User.IsInRole("catalog_manager");
 
         return query.Where(x =>
             (coordinator && x.AssignedRole == "license_coordinator") ||
-            (auditor && x.AssignedRole == "transaction_auditor"));
+            (auditor && x.AssignedRole == "transaction_auditor") ||
+            (catalog && x.AssignedRole == "catalog_manager"));
     }
 
     private static bool ValidText(string? value, int min, int max)
@@ -89,7 +146,7 @@ public sealed class SupportController(
         string category, string status)
         => category switch
         {
-            "INVALID_KEY" or "KEY_ALREADY_USED"
+            "INVALID_KEY" or "KEY_ALREADY_USED" or "WRONG_PRODUCT"
                 => status == "COMPLETED",
 
             "KEY_NOT_RECEIVED"
@@ -104,13 +161,10 @@ public sealed class SupportController(
                 => status == "PAID" ||
                    status == "COMPLETED",
 
-            "OTHER" => true,
+            "WALLET_TOPUP_ISSUE" or "CATALOG_INFO" or "OTHER" => true,
 
             _ => false
         };
-
-    private static bool NeedsLicense(string category)
-        => category is "INVALID_KEY" or "KEY_ALREADY_USED";
 
     private async Task<OwnedOrder?> VerifyOrderAsync(
         Guid orderId, CancellationToken ct)
@@ -209,6 +263,12 @@ public sealed class SupportController(
         ticket.UpdatedAtUtc = DateTime.UtcNow;
     }
 
+    // GET /api/support/tickets/categories
+    [HttpGet("categories")]
+    [AllowAnonymous]
+    public IActionResult ListCategories()
+        => Ok(CategoryCatalog);
+
     // POST /api/support/tickets
     [HttpPost]
     [Authorize(Policy = "CustomerOnly")]
@@ -222,8 +282,7 @@ public sealed class SupportController(
         var category = request.Category?.Trim().ToUpperInvariant();
 
         if (category is null ||
-            !Categories.TryGetValue(category, out var assignedRole) ||
-            request.OrderId == Guid.Empty ||
+            !CategoriesByCode.TryGetValue(category, out var meta) ||
             !ValidText(request.Subject, 3, 150) ||
             !ValidText(request.Description, 5, 3000))
         {
@@ -231,30 +290,46 @@ public sealed class SupportController(
                 "Invalid ticket information.");
         }
 
-        OwnedOrder? order;
+        var hasOrder = request.OrderId.HasValue && request.OrderId.Value != Guid.Empty;
 
-        try
+        if (meta.RequiresOrder && !hasOrder)
         {
-            order = await VerifyOrderAsync(
-                request.OrderId, ct);
-        }
-        catch (Exception ex) when (
-            ex is HttpRequestException or JsonException ||
-            (ex is OperationCanceledException &&
-             !ct.IsCancellationRequested))
-        {
-            return Error(503, "ORDER_SERVICE_UNAVAILABLE",
-                "Unable to verify order ownership.");
+            return Error(400, "INVALID_TICKET",
+                "Order ID is required for this category.");
         }
 
-        if (order is null)
-            return NotFound();
+        if (!hasOrder && request.LicenseId.HasValue && request.LicenseId.Value != Guid.Empty)
+        {
+            return Error(400, "INVALID_TICKET",
+                "Order ID is required when specifying a license.");
+        }
 
-        if (!AllowedOrderStatus(category, order.Status))
-            return Error(409, "INVALID_ORDER_STATUS",
-                "Order status does not allow this request.");
+        OwnedOrder? order = null;
 
-        if (NeedsLicense(category) &&
+        if (hasOrder)
+        {
+            try
+            {
+                order = await VerifyOrderAsync(request.OrderId!.Value, ct);
+            }
+            catch (Exception ex) when (
+                ex is HttpRequestException or JsonException ||
+                (ex is OperationCanceledException &&
+                 !ct.IsCancellationRequested))
+            {
+                return Error(503, "ORDER_SERVICE_UNAVAILABLE",
+                    "Unable to verify order ownership.");
+            }
+
+            if (order is null)
+                return NotFound();
+
+            if (!AllowedOrderStatus(category, order.Status))
+                return Error(409, "INVALID_ORDER_STATUS",
+                    "Order status does not allow this request.");
+        }
+
+        if (meta.RequiresLicense &&
             (!request.LicenseId.HasValue ||
              request.LicenseId.Value == Guid.Empty))
         {
@@ -262,9 +337,9 @@ public sealed class SupportController(
                 "License ID is required.");
         }
 
-        if (request.LicenseId.HasValue)
+        if (request.LicenseId.HasValue && request.LicenseId.Value != Guid.Empty)
         {
-            if (order.Status != "COMPLETED")
+            if (order is null || order.Status != "COMPLETED")
                 return Error(409, "INVALID_ORDER_STATUS",
                     "Order has no eligible delivered license.");
 
@@ -284,25 +359,28 @@ public sealed class SupportController(
             }
         }
 
-        var duplicate = await db.SupportTickets.AnyAsync(x =>
-            x.OrderId == order.Id &&
-            x.Category == category &&
-            (x.Status == "OPEN" ||
-             x.Status == "IN_PROGRESS"), ct);
+        if (order is not null)
+        {
+            var duplicate = await db.SupportTickets.AnyAsync(x =>
+                x.OrderId == order.Id &&
+                x.Category == category &&
+                (x.Status == "OPEN" ||
+                 x.Status == "IN_PROGRESS"), ct);
 
-        if (duplicate)
-            return Error(409, "DUPLICATE_TICKET",
-                "An active ticket already exists.");
+            if (duplicate)
+                return Error(409, "DUPLICATE_TICKET",
+                    "An active ticket already exists.");
+        }
 
         var ticket = new SupportTicket
         {
-            OrderId = order.Id,
-            LicenseId = request.LicenseId,
+            OrderId = order?.Id,
+            LicenseId = request.LicenseId is { } lid && lid != Guid.Empty ? lid : null,
             CustomerId = UserId,
             Category = category,
             Subject = request.Subject.Trim(),
             Description = request.Description.Trim(),
-            AssignedRole = assignedRole
+            AssignedRole = meta.AssignedRole
         };
 
         db.SupportTickets.Add(ticket);
@@ -327,6 +405,7 @@ public sealed class SupportController(
     [HttpGet]
     public async Task<IActionResult> List(
         [FromQuery] string? status,
+        [FromQuery] string? category,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
@@ -351,6 +430,15 @@ public sealed class SupportController(
             query = query.Where(x => x.Status == status);
         }
 
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var normalizedCat = category.Trim().ToUpperInvariant();
+            if (!CategoriesByCode.ContainsKey(normalizedCat))
+                return BadRequest();
+
+            query = query.Where(x => x.Category == normalizedCat);
+        }
+
         var total = await query.CountAsync(ct);
 
         var items = await query
@@ -367,6 +455,9 @@ public sealed class SupportController(
                 x.Subject,
                 x.Status,
                 x.AssignedRole,
+                x.HandledBy,
+                x.ResolutionOutcome,
+                x.RejectionReason,
                 x.CreatedAtUtc,
                 x.UpdatedAtUtc
             })
@@ -517,7 +608,128 @@ public sealed class SupportController(
             ticket.Id,
             ticket.Status,
             ticket.HandledBy,
+            ticket.ResolutionOutcome,
+            ticket.RejectionReason,
             ticket.UpdatedAtUtc
         });
+    }
+
+    // POST /api/support/tickets/{id}/reject
+    [HttpPost("{id:guid}/reject")]
+    public async Task<IActionResult> Reject(
+        Guid id,
+        RejectSupportTicketRequest request,
+        CancellationToken ct)
+    {
+        if (!CanAccess || IsCustomer)
+            return Forbid();
+
+        if (!ValidText(request.Reason, 5, 500))
+            return Error(400, "INVALID_REASON",
+                "Vui lòng nhập lý do từ chối từ 5 đến 500 ký tự.");
+
+        var ticket = await AccessibleTickets()
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
+
+        if (ticket is null)
+            return NotFound();
+
+        if (ticket.Status != "IN_PROGRESS" || ticket.HandledBy != UserId)
+            return Error(409, "INVALID_TRANSITION",
+                "Chỉ có thể từ chối phiếu đang xử lý do bạn phụ trách.");
+
+        if (ticket.ResolutionOutcome == "APPROVED_REFUND")
+            return Error(409, "ALREADY_APPROVED",
+                "Phiếu này đã được duyệt hoàn tiền trước đó.");
+
+        var reason = request.Reason.Trim();
+        ticket.ResolutionOutcome = "REJECTED";
+        ticket.RejectionReason = reason;
+        ticket.Status = "RESOLVED";
+
+        db.SupportMessages.Add(new SupportMessage
+        {
+            TicketId = ticket.Id,
+            SenderId = UserId!,
+            SenderRole = ticket.AssignedRole,
+            Content = $"[TỪ CHỐI YÊU CẦU] Lý do: {reason}"
+        });
+
+        Touch(ticket);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Changed();
+        }
+
+        var emailQueued = false;
+        if (ticket.OrderId.HasValue &&
+            ticket.AssignedRole is "license_coordinator" or "transaction_auditor")
+        {
+            emailQueued = await TryNotifyOrderRejectionAsync(ticket, reason, ct);
+        }
+
+        return Ok(new
+        {
+            ticket.Id,
+            ticket.Status,
+            ticket.ResolutionOutcome,
+            ticket.RejectionReason,
+            ticket.HandledBy,
+            ticket.UpdatedAtUtc,
+            notificationQueued = emailQueued
+        });
+    }
+
+    private async Task<bool> TryNotifyOrderRejectionAsync(
+        SupportTicket ticket,
+        string reason,
+        CancellationToken ct)
+    {
+        try
+        {
+            var internalKey = config["InternalService:Key"];
+            if (string.IsNullOrWhiteSpace(internalKey))
+                return false;
+
+            if (!AuthenticationHeaderValue.TryParse(
+                    Request.Headers.Authorization.ToString(),
+                    out var auth) ||
+                !string.Equals(auth.Scheme, "Bearer",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            using var req = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"api/internal/support/tickets/{ticket.Id:D}/refund/reject-notify");
+            req.Headers.Authorization = auth;
+            req.Headers.Add("X-Internal-Service-Key", internalKey);
+            req.Content = JsonContent.Create(new
+            {
+                ticketId = ticket.Id,
+                orderId = ticket.OrderId!.Value,
+                customerId = ticket.CustomerId,
+                reason
+            });
+
+            using var res = await clients
+                .CreateClient("SupportOrders")
+                .SendAsync(req, ct);
+
+            return res.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(
+                "Could not queue refund rejection email for ticket {TicketId}: {Error}",
+                ticket.Id, ex.GetType().Name);
+            return false;
+        }
     }
 }

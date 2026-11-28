@@ -13,12 +13,13 @@ CREATE TABLE IF NOT EXISTS notification_messages (
     "NextRetryAtUtc" timestamptz NOT NULL,
     "SentAtUtc" timestamptz NULL,
     "LastError" varchar(100) NULL,
+    "Detail" varchar(500) NULL,
 
     CONSTRAINT notification_order_type_unique
         UNIQUE ("OrderId", "Type"),
 
     CONSTRAINT notification_type_check
-        CHECK ("Type" IN ('COMPLETED', 'REFUNDED')),
+        CHECK ("Type" IN ('COMPLETED', 'REFUNDED', 'REFUND_REJECTED')),
 
     CONSTRAINT notification_status_check
         CHECK ("Status" IN (
@@ -28,6 +29,11 @@ CREATE TABLE IF NOT EXISTS notification_messages (
     CONSTRAINT notification_retry_check
         CHECK ("RetryCount" >= 0)
 );
+
+ALTER TABLE notification_messages ADD COLUMN IF NOT EXISTS "Detail" varchar(500) NULL;
+ALTER TABLE notification_messages DROP CONSTRAINT IF EXISTS notification_type_check;
+ALTER TABLE notification_messages ADD CONSTRAINT notification_type_check
+    CHECK ("Type" IN ('COMPLETED', 'REFUNDED', 'REFUND_REJECTED'));
 
 CREATE INDEX IF NOT EXISTS notification_pending_idx
 ON notification_messages ("Status", "NextRetryAtUtc");

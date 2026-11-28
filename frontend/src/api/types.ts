@@ -111,9 +111,13 @@ export interface CustomerLicense {
   orderItemId: string;
   status: LicenseStatus;
   assignedAtUtc: string;
+  revealedAtUtc?: string | null;
+  isRevealed?: boolean;
 }
 
 export interface RevealLicenseResponse {
   id: string;
   licenseKey: string;
+  revealedAtUtc?: string | null;
+  isRevealed?: boolean;
 }

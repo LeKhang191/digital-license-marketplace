@@ -136,7 +136,29 @@ public sealed class LicenseDbContext(
         });
 
 
+        var supplier = modelBuilder.Entity<Supplier>();
+        supplier.ToTable("suppliers");
+        supplier.HasKey(x => x.Id);
+        supplier.Property(x => x.Name).HasMaxLength(160).IsRequired();
+        supplier.Property(x => x.NormalizedName).HasMaxLength(160).IsRequired();
+        supplier.HasIndex(x => x.NormalizedName).IsUnique();
+        supplier.Property(x => x.Website).HasMaxLength(500);
+        supplier.Property(x => x.Email).HasMaxLength(255);
+        supplier.Property(x => x.Phone).HasMaxLength(80);
+        supplier.Property(x => x.Notes).HasMaxLength(2000);
+        var batch = modelBuilder.Entity<LicenseImportBatch>();
+        batch.HasOne<Supplier>().WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
+        batch.ToTable("license_import_batches");
+        batch.HasKey(x => x.Id);
+        batch.Property(x => x.SupplierName).HasMaxLength(160).IsRequired();
+        batch.Property(x => x.Reference).HasMaxLength(120);
+        batch.Property(x => x.UnitCostVnd).HasPrecision(18, 2);
+        batch.Property(x => x.Method).HasMaxLength(16).IsRequired();
+        batch.Property(x => x.ImportedBy).HasMaxLength(255).IsRequired();
+        batch.HasIndex(x => x.CreatedAtUtc);
         var entity = modelBuilder.Entity<LicenseKey>();
+        entity.HasOne<LicenseImportBatch>().WithMany()
+            .HasForeignKey(x => x.ImportBatchId).OnDelete(DeleteBehavior.Restrict);
 
         entity.ToTable("license_keys", table =>
         {

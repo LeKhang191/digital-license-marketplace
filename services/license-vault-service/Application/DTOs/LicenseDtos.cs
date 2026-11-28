@@ -6,6 +6,10 @@ namespace LicenseVault.Api.Application.DTOs;
 public sealed class ImportLicensesRequest
 {
     public Guid ProductId { get; set; }
+    public Guid? SupplierId { get; set; }
+    public string? SupplierName { get; set; }
+    public string? Reference { get; set; }
+    public decimal? UnitCostVnd { get; set; }
 
     [Required]
     [MinLength(1)]
@@ -18,7 +22,8 @@ public sealed record ImportLicensesResponse(
     int Total,
     int Imported,
     int Duplicates,
-    int Invalid
+    int Invalid,
+    Guid? BatchId = null
 );
 
 public sealed record LicenseInventoryResponse(

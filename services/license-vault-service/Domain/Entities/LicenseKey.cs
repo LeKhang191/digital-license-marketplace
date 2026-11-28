@@ -7,6 +7,8 @@ public sealed class LicenseKey
 
     public Guid ProductId { get; set; }
 
+    public Guid? ImportBatchId { get; set; }
+
     public string EncryptedKey { get; set; } = string.Empty;
 
     public string KeyFingerprint { get; set; } = string.Empty;

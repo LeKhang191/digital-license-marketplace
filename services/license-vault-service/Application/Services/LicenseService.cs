@@ -15,7 +15,8 @@ public sealed class LicenseService(
     public async Task<ImportLicensesResponse> ImportAsync(
         Guid productId,
         IReadOnlyList<string> keys,
-        CancellationToken ct)
+        CancellationToken ct,
+        LicenseImportBatch batch)
     {
         int imported = 0;
         int duplicates = 0;
@@ -26,6 +27,17 @@ public sealed class LicenseService(
 
         await using var transaction =
             await db.Database.BeginTransactionAsync(ct);
+
+        if (batch.SupplierId is Guid supplierId)
+        {
+            // Lock the supplier until import commits, so deactivation cannot race this import.
+            var rows = await db.Set<Supplier>().FromSqlInterpolated($"SELECT * FROM suppliers WHERE \"Id\" = {supplierId} FOR UPDATE").AsNoTracking().ToListAsync(ct);
+            var supplier = rows.SingleOrDefault();
+            if (supplier == null || !supplier.IsActive) throw new SupplierUnavailableException();
+            batch.SupplierName = supplier.Name;
+        }
+        db.Add(batch);
+        await db.SaveChangesAsync(ct);
 
         foreach (var raw in keys)
         {
@@ -65,7 +77,8 @@ public sealed class LicenseService(
                         "EncryptedKey",
                         "KeyFingerprint",
                         "Status",
-                        "CreatedAtUtc"
+                        "CreatedAtUtc",
+                        "ImportBatchId"
                     )
                     VALUES
                     (
@@ -74,7 +87,8 @@ public sealed class LicenseService(
                         {encrypted},
                         {fingerprint},
                         {LicenseStatus.Available},
-                        {now}
+                        {now},
+                        {batch.Id}
                     )
                     ON CONFLICT ("KeyFingerprint")
                     DO NOTHING
@@ -87,6 +101,11 @@ public sealed class LicenseService(
                 duplicates++;
         }
 
+        batch.Total = keys.Count;
+        batch.Imported = imported;
+        batch.Duplicates = duplicates;
+        batch.Invalid = invalid;
+        await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
         return new ImportLicensesResponse(
@@ -94,7 +113,8 @@ public sealed class LicenseService(
             keys.Count,
             imported,
             duplicates,
-            invalid
+            invalid,
+            batch.Id
         );
     }
 

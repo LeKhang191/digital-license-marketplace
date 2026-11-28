@@ -123,31 +123,18 @@ export function ProductPage() {
           ) : canPurchase ? (
             <>
               <div className="row">
-                <label>
-                  Số lượng{" "}
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={quantity}
-                    disabled={busy}
-                    onChange={(e) =>
-                      setQuantity(
-                        Math.min(
-                          10,
-                          Math.max(
-                            1,
-                            Math.trunc(
-                              Number(e.target.value) || 1
-                            )
-                          )
-                        )
-                      )
-                    }
-                    style={{ width: 72 }}
-                  />
-                </label>
+                <div className="quantity-control">
+                  <label htmlFor="purchase-quantity">Số lượng</label>
+                  <div className="quantity-stepper">
+                    <button type="button" aria-label="Giảm số lượng" disabled={busy || quantity <= 1}
+                      onClick={() => setQuantity(n => Math.max(1, n - 1))}>−</button>
+                    <input id="purchase-quantity" type="number" min={1} max={10} step={1}
+                      value={quantity} disabled={busy}
+                      onChange={e => setQuantity(Math.min(10, Math.max(1, Math.trunc(Number(e.target.value) || 1))))} />
+                    <button type="button" aria-label="Tăng số lượng" disabled={busy || quantity >= 10}
+                      onClick={() => setQuantity(n => Math.min(10, n + 1))}>+</button>
+                  </div>
+                </div>
 
                 <button
                   className="btn"
@@ -162,7 +149,7 @@ export function ProductPage() {
                 </button>
               </div>
 
-              <div style={{ marginTop: 20 }}>
+              <div className="purchase-total" aria-live="polite">
                 <strong>Tổng thanh toán: </strong>
 
                 <span

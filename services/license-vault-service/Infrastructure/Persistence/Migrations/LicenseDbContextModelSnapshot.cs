@@ -93,6 +93,44 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                     b.ToTable("allocation_results", (string)null);
                 });
 
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.Supplier", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(160).HasColumnType("character varying(160)");
+                    b.Property<string>("NormalizedName").IsRequired().HasMaxLength(160).HasColumnType("character varying(160)");
+                    b.Property<string>("Website").HasMaxLength(500).HasColumnType("character varying(500)");
+                    b.Property<string>("Email").HasMaxLength(255).HasColumnType("character varying(255)");
+                    b.Property<string>("Phone").HasMaxLength(80).HasColumnType("character varying(80)");
+                    b.Property<string>("Notes").HasMaxLength(2000).HasColumnType("character varying(2000)");
+                    b.Property<bool>("IsActive").HasColumnType("boolean");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.HasKey("Id");
+                    b.HasIndex("NormalizedName").IsUnique();
+                    b.ToTable("suppliers", (string)null);
+                });
+
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.LicenseImportBatch", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<Guid>("ProductId").HasColumnType("uuid");
+                    b.Property<Guid?>("SupplierId").HasColumnType("uuid");
+                    b.Property<string>("SupplierName").IsRequired().HasMaxLength(160).HasColumnType("character varying(160)");
+                    b.Property<string>("Reference").HasMaxLength(120).HasColumnType("character varying(120)");
+                    b.Property<decimal?>("UnitCostVnd").HasPrecision(18, 2).HasColumnType("numeric(18,2)");
+                    b.Property<string>("Method").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
+                    b.Property<string>("ImportedBy").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<int>("Total").HasColumnType("integer");
+                    b.Property<int>("Imported").HasColumnType("integer");
+                    b.Property<int>("Duplicates").HasColumnType("integer");
+                    b.Property<int>("Invalid").HasColumnType("integer");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedAtUtc");
+                    b.HasIndex("SupplierId");
+                    b.ToTable("license_import_batches", (string)null);
+                });
+
             modelBuilder.Entity("LicenseVault.Api.Domain.Entities.LicenseKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -112,6 +150,8 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                     b.Property<string>("EncryptedKey")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("ImportBatchId").HasColumnType("uuid");
 
                     b.Property<string>("KeyFingerprint")
                         .IsRequired()
@@ -138,6 +178,8 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("ImportBatchId");
 
                     b.HasIndex("KeyFingerprint")
                         .IsUnique();
@@ -259,6 +301,16 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OldLicenseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.LicenseKey", b =>
+                {
+                    b.HasOne("LicenseVault.Api.Domain.Entities.LicenseImportBatch", null)
+                        .WithMany().HasForeignKey("ImportBatchId").OnDelete(DeleteBehavior.Restrict);
+                });
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.LicenseImportBatch", b =>
+                {
+                    b.HasOne("LicenseVault.Api.Domain.Entities.Supplier", null)
+                        .WithMany().HasForeignKey("SupplierId").OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

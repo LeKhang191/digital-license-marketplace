@@ -10,6 +10,7 @@ export function listProducts(params: {
   search?: string;
   category?: string;
   page?: number;
+  signal?: AbortSignal;
 }) {
   const q = new URLSearchParams({ pageSize: "12" });
 
@@ -17,7 +18,7 @@ export function listProducts(params: {
   if (params.category) q.set("category", params.category);
   if (params.page) q.set("page", String(params.page));
 
-  return api<PagedProducts>(`/catalog/products?${q}`);
+  return api<PagedProducts>(`/catalog/products?${q}`, { signal: params.signal });
 }
 
 export function listManagedProducts(params: {

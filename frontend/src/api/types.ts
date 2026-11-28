@@ -82,9 +82,14 @@ export interface LicenseInventory {
 export interface ImportLicensesRequest {
   productId: string;
   keys: string[];
+  supplierId?: string;
+  supplierName?: string;
+  reference?: string;
+  unitCostVnd?: number;
 }
 
 export interface ImportLicensesResponse {
+  batchId?: string;
   productId: string;
   total: number;
   imported: number;

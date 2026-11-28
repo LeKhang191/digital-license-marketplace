@@ -42,11 +42,18 @@ export function importLicenses(
 export function importLicenseFile(
   productId: string,
   file: File,
+  metadata?: ImportSource,
 ) {
   const formData = new FormData();
 
   formData.append("productId", productId);
   formData.append("file", file);
+  if (metadata) {
+    if (metadata.supplierId) formData.append("supplierId", metadata.supplierId);
+    if (metadata.supplierName) formData.append("supplierName", metadata.supplierName);
+    if (metadata.reference) formData.append("reference", metadata.reference);
+    if (metadata.unitCostVnd !== undefined) formData.append("unitCostVnd", String(metadata.unitCostVnd));
+  }
 
   return api<ImportLicensesResponse>(
     "/licenses/import-file",
@@ -132,3 +139,18 @@ export function getKinguinMockOrder(requestId: string) {
     auth: true, cache: "no-store",
   });
 }
+
+export interface ImportSource { supplierId?: string; supplierName?: string; reference?: string; unitCostVnd?: number }
+export interface ImportBatch extends ImportSource {
+  id: string; supplierName: string; productId: string; method: string; createdAtUtc: string;
+  total: number; imported: number; duplicates: number; invalid: number;
+}
+export function listImportBatches() {
+  return api<ImportBatch[]>("/licenses/import-batches", { auth: true, cache: "no-store" });
+}
+
+export interface SupplierInput { name: string; website: string | null; email: string | null; phone: string | null; notes: string | null; isActive: boolean }
+export interface Supplier extends SupplierInput { id: string; batchCount: number; imported: number; duplicates: number; knownCostVnd: number; unknownCostKeys: number }
+export const listSuppliers = () => api<Supplier[]>("/licenses/suppliers", {auth:true, cache:"no-store"});
+export const saveSupplier = (data: SupplierInput, id?: string) => api<{id:string}>(`/licenses/suppliers${id ? `/${encodeURIComponent(id)}` : ""}`, {auth:true, method:id?"PATCH":"POST", body:JSON.stringify(data)});
+export const listSupplierBatches = (id: string) => api<ImportBatch[]>(`/licenses/suppliers/${encodeURIComponent(id)}/batches`, {auth:true,cache:"no-store"});

@@ -86,10 +86,13 @@ export default function App() {
             <RoleGuard
               allowedRoles={[Roles.LICENSE_COORDINATOR]}
             >
-              <LicensePage />
+              <LicensePage key="inventory" view="inventory" />
             </RoleGuard>
           }
         />
+
+        <Route path="/licenses/import" element={<RoleGuard allowedRoles={[Roles.LICENSE_COORDINATOR]}><LicensePage key="import" view="import" /></RoleGuard>} />
+        <Route path="/licenses/suppliers" element={<RoleGuard allowedRoles={[Roles.LICENSE_COORDINATOR]}><LicensePage key="supplier" view="supplier" /></RoleGuard>} />
 
         {/* Transaction Auditor routes */}
 

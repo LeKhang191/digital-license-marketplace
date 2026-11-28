@@ -1,6 +1,9 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { SupplierDirectory } from "./SupplierDirectory";
+import { previewLicenseFile, downloadLicenseTemplate } from "./licenseFilePreview";
+import { NavLink, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
 import { listProducts } from "../api/products";
@@ -16,6 +19,10 @@ import {
   getKinguinMockOrder,
   type KinguinMockOrder,
   type KinguinQuote,
+  listImportBatches,
+  listSuppliers,
+  type Supplier,
+  type ImportBatch,
 } from "../api/licenses";
 
 import type {
@@ -25,8 +32,39 @@ import type {
   ImportLicensesResponse,
 } from "../api/types";
 
-export function LicensePage() {
+export function LicensePage({ view = "inventory" }: { view?: "inventory" | "import" | "supplier" }) {
+  const isInventory = view === "inventory";
+  const isImport = view === "import";
+  const isSupplier = view === "supplier";
+  const [params] = useSearchParams();
+  const [sourceId, setSourceId] = useState(() => params.get("supplier") ?? "");
+  const [sources, setSources] = useState<Supplier[]>([]);
+  const [sourcesError, setSourcesError] = useState("");
+  const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [showKinguin, setShowKinguin] = useState(false);
+  const [sourceRef, setSourceRef] = useState("");
+  const [unitCost, setUnitCost] = useState("");
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [batchError, setBatchError] = useState("");
+  const [batchFilter, setBatchFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showTestProducts, setShowTestProducts] = useState(false);
+  const [lookupId, setLookupId] = useState("");
+  const [lookupResult, setLookupResult] = useState<KinguinMockOrder | null>(null);
+  const [lookupError, setLookupError] = useState("");
+  const [lookupBusy, setLookupBusy] = useState(false);
   const { ready, isLicenseCoordinator } = useAuth();
+  useEffect(() => {
+    if (!ready || !isLicenseCoordinator || !isImport) return;
+    let active = true;
+    setSourcesLoading(true);
+    listSuppliers().then(data => { if (active) setSources(data); })
+      .catch(e => { if (active) setSourcesError(e instanceof Error ? e.message : "Không tải được nhà cung cấp"); })
+      .finally(() => { if (active) setSourcesLoading(false); });
+    return () => { active = false; };
+  }, [ready, isLicenseCoordinator, isImport]);
+
 
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<LicenseInventory[]>([]);
@@ -44,7 +82,7 @@ export function LicensePage() {
   const [mockError, setMockError] = useState("");
 
   async function submitMockOrder() {
-    if (mockBusy || supplierQuote?.mode !== "Mock") return;
+    if (mockBusy || !isSupplier || (!mockRequest && (supplierLoading || supplierQuote?.mode !== "Mock" || !supplierQuote.canFulfill))) return;
     const request = mockRequest ?? { id: crypto.randomUUID(), product: productId, quantity: supplierQuantity };
     setMockRequest(request);
     setMockBusy(true);
@@ -74,7 +112,7 @@ export function LicensePage() {
     setSupplierQuote(null);
     setSupplierError("");
     setSupplierLoading(false);
-    if (!ready || !isLicenseCoordinator || !productId || supplierRefresh === 0) return;
+    if (!isSupplier || !ready || !isLicenseCoordinator || !productId || supplierRefresh === 0) return;
     const controller = new AbortController();
     setSupplierLoading(true);
     getKinguinQuote(productId, supplierQuantity, controller.signal)
@@ -84,13 +122,45 @@ export function LicensePage() {
       })
       .finally(() => { if (!controller.signal.aborted) setSupplierLoading(false); });
     return () => controller.abort();
-  }, [ready, isLicenseCoordinator, productId, supplierQuantity, supplierRefresh]);
+  }, [isSupplier, ready, isLicenseCoordinator, productId, supplierQuantity, supplierRefresh]);
 
   const [mode, setMode] = useState<"manual" | "file">("manual");
 
   const [rawKeys, setRawKeys] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileVersion, setFileVersion] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<ReturnType<typeof previewLicenseFile> | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setPreview(null);
+    setPreviewError("");
+    setPreviewLoading(false);
+    if (!file) return;
+    if (!/\.(csv|txt)$/i.test(file.name) || !file.size || file.size > 1048576) {
+      setPreviewError("Chọn file CSV/TXT có dữ liệu, tối đa 1 MB.");
+      return;
+    }
+    setPreviewLoading(true);
+    file.text().then(text => {
+      if (active) setPreview(previewLicenseFile(text, /\.csv$/i.test(file.name)));
+    }).catch(e => { if (active) setPreviewError(e instanceof Error ? e.message : "Không đọc được file."); })
+      .finally(() => { if (active) setPreviewLoading(false); });
+    return () => { active = false; };
+  }, [file]);
+
+  function chooseFile(next: File | null) {
+    if (next === file) return;
+    setPreview(null);
+    setPreviewError("");
+    setPreviewLoading(!!next);
+    setFile(next);
+    setResult(null);
+    setError("");
+    setSuccess("");
+  }
 
   const [loading, setLoading] = useState(true);
   const [loadingKeys, setLoadingKeys] = useState(false);
@@ -104,6 +174,14 @@ export function LicensePage() {
     useState<ImportLicensesResponse | null>(null);
 
   const [refreshVersion, setRefreshVersion] = useState(0);
+  useEffect(() => {
+    if (!ready || !isLicenseCoordinator || !isImport) return;
+    let active = true;
+    setBatchError("");
+    listImportBatches().then(items => { if (active) setBatches(items); })
+      .catch(e => { if (active) setBatchError(e instanceof Error ? e.message : "Không tải được lịch sử"); });
+    return () => { active = false; };
+  }, [ready, isLicenseCoordinator, isImport, refreshVersion]);
 
   useEffect(() => {
     if (!ready || !isLicenseCoordinator) return;
@@ -141,7 +219,7 @@ export function LicensePage() {
 
           if (current && exists) return current;
 
-          return items[0]?.id ?? stock[0]?.productId ?? "";
+          return isInventory ? (stock[0]?.productId ?? "") : "";
         });
       } catch (e) {
         if (!cancelled) {
@@ -161,13 +239,13 @@ export function LicensePage() {
     return () => {
       cancelled = true;
     };
-  }, [ready, isLicenseCoordinator, refreshVersion]);
+  }, [isInventory, ready, isLicenseCoordinator, refreshVersion]);
 
   useEffect(() => {
     setLicenses([]);
     setDetailError("");
 
-    if (!ready || !isLicenseCoordinator || !productId) {
+    if (!isInventory || !ready || !isLicenseCoordinator || !productId) {
       setLoadingKeys(false);
       return;
     }
@@ -191,6 +269,7 @@ export function LicensePage() {
       cancelled = true;
     };
   }, [
+    isInventory,
     ready,
     isLicenseCoordinator,
     productId,
@@ -231,6 +310,9 @@ export function LicensePage() {
   }
 
   function changeProduct(id: string) {
+    if (mockRequest || mockBusy) return;
+    setSupplierQuote(null);
+    setSupplierRefresh(0);
     setProductId(id);
     setRawKeys("");
     setFile(null);
@@ -279,6 +361,9 @@ export function LicensePage() {
     }
 
     if (mode === "file") {
+      if (previewLoading || !preview || preview.candidates === 0 || previewError) {
+        setError("Vui lòng kiểm tra file trước khi nhập kho."); return;
+      }
       if (!file) {
         setError("Vui lòng chọn file CSV hoặc TXT.");
         return;
@@ -295,6 +380,11 @@ export function LicensePage() {
       }
     }
 
+    const cost = unitCost.trim() ? Number(unitCost) : undefined;
+    if (!sources.some(s => s.id === sourceId && s.isActive) || (cost !== undefined && (!Number.isFinite(cost) || cost < 0 || cost > 1e12 || Math.round(cost * 100) / 100 !== cost))) {
+      setError("Vui lòng nhập nguồn hàng và giá vốn hợp lệ (VND)."); return;
+    }
+    const metadata = { supplierId: sourceId, reference: sourceRef.trim() || undefined, unitCostVnd: cost };
     setBusy(true);
 
     try {
@@ -303,10 +393,12 @@ export function LicensePage() {
           ? await importLicenses({
               productId,
               keys: manualKeys,
+              ...metadata,
             })
-          : await importLicenseFile(productId, file!);
+          : await importLicenseFile(productId, file!, metadata);
 
       setResult(response);
+      setSourceRef("");
 
       setSuccess(
         `Đã nhập thành công ${response.imported} Key.`
@@ -382,15 +474,27 @@ export function LicensePage() {
     );
   }
 
+  const matches = (name: string) => name.toLocaleLowerCase("vi").includes(search.trim().toLocaleLowerCase("vi"));
+  const isTestProduct = (p: Product) => /^TEST(?:\s|$)/i.test(p.name) || /^(?:license-vault-test|allocation-)/i.test(p.slug);
+  const filteredProducts = products.filter(p => p.isActive && (showTestProducts || !isTestProduct(p)) && matches(p.name + " " + p.slug));
+  const filteredInventory = inventory.filter(item => matches(productName(item.productId) + " " + item.productId));
+  const filteredLicenses = licenses.filter(item => statusFilter === "all" || item.status === statusFilter);
+
   return (
-    <div className="container">
-      <h1>Quản lý kho License Key</h1>
+    <div className="container license-workspace">
+      <h1>{isInventory ? "Quản lý kho License" : isImport ? "Nhập kho License" : "Quản lý nhà cung cấp"}</h1>
 
       <p className="muted">
-        License Coordinator Dashboard
+        {isInventory ? "Theo dõi tồn kho và trạng thái license." : isImport ? "Nhập key cho sản phẩm đang mở bán trong Catalog." : "Quản lý nguồn nhập hàng và các kết nối API đã tích hợp."}
       </p>
 
-      <div className="grid admin-summary license-summary">
+      <nav className="license-nav" aria-label="Quản lý license">
+        <NavLink end to="/licenses">Xem kho</NavLink>
+        <NavLink to="/licenses/import">Nhập kho</NavLink>
+        <NavLink to="/licenses/suppliers">Nhà cung cấp</NavLink>
+      </nav>
+
+      {isInventory && <div className="grid admin-summary license-summary">
         <div className="card">
           <h2>Tổng License Key</h2>
           <strong>{loading ? "—" : totals.total}</strong>
@@ -416,7 +520,7 @@ export function LicensePage() {
             {loading ? "—" : totals.disabled}
           </strong>
         </div>
-      </div>
+      </div>}
 
       {error && (
         <div className="alert" role="alert">
@@ -430,106 +534,38 @@ export function LicensePage() {
         </div>
       )}
 
-      <form
+      {isImport && <form
         className="card admin-form"
         onSubmit={handleImport}
       >
         <h2>Nhập License Key</h2>
+        <p className="muted">Chọn nguồn hàng bất kỳ; không cần API nhà cung cấp. Chỉ nhập key hợp pháp hoặc key demo được đánh dấu rõ.</p>
 
         <fieldset disabled={busy || loading}>
           <div className="license-form">
-            <label>
-              Sản phẩm
-
-              <select
-                required
-                value={productId}
-                onChange={(e) =>
-                  changeProduct(e.target.value)
-                }
-              >
-                <option value="">
-                  Chọn sản phẩm
-                </option>
-
-                {products.map((product) => (
-                  <option
-                    key={product.id}
-                    value={product.id}
-                  >
-                    {product.name}
-                  </option>
-                ))}
-
-                {inventory
-                  .filter((item) =>
-                    !products.some(
-                      (p) => p.id === item.productId
-                    )
-                  )
-                  .map((item) => (
-                    <option
-                      key={item.productId}
-                      value={item.productId}
-                    >
-                      {productName(item.productId)}
-                    </option>
-                  ))}
+            <label>Nhà cung cấp / nguồn hàng
+              <select required value={sourceId} onChange={e => setSourceId(e.target.value)} disabled={sourcesLoading || !!sourcesError}>
+                <option value="">{sourcesLoading ? "Đang tải nguồn hàng..." : "Chọn nhà cung cấp"}</option>
+                {sources.filter(s => s.isActive).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              {sourcesError && <span role="alert">{sourcesError}</span>}
+              <NavLink to="/licenses/suppliers">Quản lý / thêm nhà cung cấp</NavLink>
+            </label>
+            <label>Mã lô / chứng từ (không bắt buộc)<input maxLength={120} value={sourceRef} onChange={e => setSourceRef(e.target.value)} /></label>
+            <label>Giá nhập một key (VND, không bắt buộc)<input type="number" min="0" max="1000000000000" step="0.01" value={unitCost} onChange={e => setUnitCost(e.target.value)} /></label>
+            <label>Tìm sản phẩm trong Catalog
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên game hoặc slug" disabled={!!mockRequest || mockBusy} />
+            </label>
+            <label>Sản phẩm đang mở bán
+              <select required value={productId} onChange={e => changeProduct(e.target.value)} disabled={loading || !!mockRequest || mockBusy}>
+                <option value="">Chọn sản phẩm</option>
+                {selectedProduct && !filteredProducts.some(p => p.id === productId) && <option value={productId}>{selectedProduct.name}</option>}
+                {filteredProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-
-            {productId && (
-              <p className="muted">
-                Tồn kho hiện tại:{" "}
-                {selectedInventory?.available ?? 0} Key
-                khả dụng
-              </p>
-            )}
-
-            {productId && (
-              <section className="card">
-                <h3>Kinguin — tra cứu nhà cung cấp</h3>
-                <p className="muted">Không mua key thật hoặc thay đổi kho license thật hay giá bán.</p>
-                <label>Số lượng
-                  <select value={supplierQuantity} onChange={(e) => setSupplierQuantity(Number(e.target.value))}>
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </label>
-                <button type="button" disabled={supplierLoading} onClick={() => setSupplierRefresh((v) => v + 1)}>
-                  {supplierLoading ? "Đang tra cứu..." : "Tra cứu Kinguin"}
-                </button>
-                {supplierError && <p role="status">{supplierError}</p>}
-                {(supplierQuote?.mode === "Mock" || mockRequest) && (
-                  <div aria-live="polite">
-                    <p className="muted">Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật.</p>
-                    <button type="button" disabled={mockBusy || !!mockResult || supplierQuote?.mode !== "Mock"} onClick={submitMockOrder}>
-                      {mockRequest ? "Gửi lại cùng Request ID" : "Mô phỏng thanh toán và nhập key"}
-                    </button>
-                    {mockRequest && <>
-                      <p>Request ID: {mockRequest.id}</p>
-                      <button type="button" disabled={mockBusy} onClick={refreshMockOrder}>Kiểm tra trạng thái</button>
-                      <button type="button" disabled={mockBusy || mockResult?.status === "MOCK_PENDING" || !mockResult} onClick={() => { setMockRequest(null); setMockResult(null); setMockError(""); }}>Đơn thử nghiệm mới</button>
-                    </>}
-                    {mockResult && <p>{mockResult.status} · {mockResult.quantity} key · {mockResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
-                    {mockError && <p role="status">{mockError}</p>}
-                  </div>
-                )}
-
-                {supplierQuote && (
-                  <div aria-live="polite">
-                    <p>{supplierQuote.mode} · {supplierQuote.supplierProductId}</p>
-                    {supplierQuote.quote ? <>
-                      <p>Giá tham khảo: {supplierQuote.quote.price.toFixed(2)} {supplierQuote.currency}</p>
-                      <p>Text key khả dụng theo báo giá: {supplierQuote.quote.textQty}</p>
-                      <p>{supplierQuote.canFulfill ? "Đủ theo báo giá" : "Không đủ theo báo giá"}</p>
-                      {supplierQuote.estimatedCost !== null && <p>Ước tính: {supplierQuote.estimatedCost.toFixed(2)} {supplierQuote.currency}</p>}
-                    </> : <p>Không tìm thấy sản phẩm nhà cung cấp.</p>}
-                    <p className="muted">Không bảo đảm giá hoặc tồn kho khi mua thực tế.</p>
-                  </div>
-                )}
-              </section>
-            )}
-
+            <label className="license-test-toggle"><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} disabled={!!mockRequest || mockBusy} /> Hiện sản phẩm kiểm thử (theo tên/slug)</label>
+            <p className="muted">Nguồn: Catalog Service · {filteredProducts.length} sản phẩm phù hợp.</p>
+            {selectedProduct && <p className="muted">Tồn kho nội bộ: {selectedInventory?.available ?? 0} key khả dụng.</p>}
             {!selectedProduct && productId && (
               <p className="muted">
                 Sản phẩm không mở bán.
@@ -559,7 +595,7 @@ export function LicensePage() {
                 }
                 onClick={() => changeMode("file")}
               >
-                Import dataset
+                Nhập từ file
               </button>
             </div>
 
@@ -588,35 +624,46 @@ export function LicensePage() {
                 </span>
               </label>
             ) : (
-              <div className="license-upload">
-                <label>
-                  Chọn dataset CSV hoặc TXT
-
-                  <input
-                    key={fileVersion}
-                    type="file"
-                    accept=".csv,.txt"
-                    onChange={(e) =>
-                      setFile(e.target.files?.[0] ?? null)
-                    }
-                  />
-                </label>
-
-                <p className="muted">
-                  Tối đa 1 MB và 1.000 Key mỗi lần.
-                </p>
-
-                {file && (
-                  <p>
-                    File đã chọn: <strong>{file.name}</strong>
-                  </p>
-                )}
-
-                <div className="muted">
-                  CSV: một cột license_key.
-                  <br />
-                  TXT: mỗi dòng một Key.
+              <div className="license-file-panel">
+                <div className="license-dropzone"
+                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = busy || loading ? "none" : "copy"; }}
+                  onDrop={e => { e.preventDefault(); if (!busy && !loading && e.dataTransfer.files.length) { setFileVersion(v => v + 1); chooseFile(e.dataTransfer.files[0]); } }}>
+                  <svg className="license-upload-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5" />
+                  </svg>
+                  <strong>Kéo và thả file vào đây</strong>
+                  <span className="muted">hoặc</span>
+                  <input hidden ref={fileInputRef} key={fileVersion} type="file" accept=".csv,.txt"
+                    onChange={e => { const next = e.currentTarget.files?.[0]; if (next) chooseFile(next); e.currentTarget.value = ""; }} />
+                  <button type="button" className="btn license-file-pick" disabled={busy || loading}
+                    onClick={() => fileInputRef.current?.click()}>Chọn file từ máy</button>
+                  <span className="muted">CSV, TXT · Tối đa 1 MB · 1.000 key</span>
                 </div>
+                <div className="license-file-templates">
+                  <span className="muted">Chưa có file đúng định dạng?</span>
+                  <button type="button" className="license-file-link" onClick={() => downloadLicenseTemplate(true)}>↓ Mẫu CSV</button>
+                  <button type="button" className="license-file-link" onClick={() => downloadLicenseTemplate(false)}>↓ Mẫu TXT</button>
+                </div>
+                <small className="muted">CSV: một cột license_key. TXT: mỗi dòng một key. File mẫu chỉ chứa key DEMO.</small>
+                {file && <div className="license-file-selected">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6" /></svg>
+                  <div className="license-file-name"><strong>{file.name}</strong><small className="muted">{Math.ceil(file.size / 1024)} KB</small></div>
+                  <button type="button" className="license-file-remove" aria-label="Bỏ file đã chọn" title="Bỏ file" onClick={() => { chooseFile(null); setFileVersion(v => v + 1); }}>×</button>
+                </div>}
+                {previewLoading && <p role="status" className="muted">Đang kiểm tra file...</p>}
+                {previewError && <p role="alert" className="license-file-error">{previewError}</p>}
+                {preview && <div className="license-file-preview" aria-live="polite">
+                  <h3>Kết quả kiểm tra</h3>
+                  <div className="license-file-stats">
+                    <div><strong>{preview.total}</strong><span>Tổng key</span></div>
+                    <div className="file-valid"><strong>{preview.candidates}</strong><span>Có thể nhập</span></div>
+                    <div className="file-duplicate"><strong>{preview.duplicates}</strong><span>Trùng trong file</span></div>
+                    <div className="file-invalid"><strong>{preview.invalid}</strong><span>Không hợp lệ</span></div>
+                  </div>
+                  {preview.duplicates > 0 && <p className="license-file-warning">Phát hiện {preview.duplicates} key trùng trong file.</p>}
+                  {preview.invalid > 0 && <p className="license-file-error">Phát hiện {preview.invalid} key sai định dạng.</p>}
+                  <small className="muted">Ước tính tại trình duyệt. Server kiểm tra key trùng trong kho và xác nhận số lượng nhập thực tế.</small>
+                </div>}
               </div>
             )}
 
@@ -628,21 +675,22 @@ export function LicensePage() {
                   busy ||
                   loading ||
                   !selectedProduct?.isActive ||
+                  sourcesLoading || !!sourcesError || !sources.some(s => s.id === sourceId && s.isActive) ||
                   (mode === "manual"
                     ? manualKeys.length === 0
-                    : !file)
+                    : !file || previewLoading || !preview || !!previewError || preview.candidates === 0)
                 }
               >
                 {busy
                   ? "Đang xử lý..."
-                  : "Nhập Key vào kho"}
+                  : "Nhập key vào kho"}
               </button>
             </div>
           </div>
         </fieldset>
-      </form>
+      </form>}
 
-      {result && (
+      {isImport && result && (
         <div className="card license-import-result">
           <h2>Kết quả nhập kho</h2>
 
@@ -676,6 +724,101 @@ export function LicensePage() {
         </div>
       )}
 
+      {isImport && <section className="card admin-table-container">
+        <h2>Lịch sử nhập kho</h2>
+        <p className="muted">200 lô gần nhất; giá vốn chỉ tính trên số key nhập thành công. Không hiển thị key.</p>
+        <label>Lọc nguồn hàng<input value={batchFilter} onChange={e => setBatchFilter(e.target.value)} placeholder="Tên nhà cung cấp" /></label>
+        {batchError && <p role="alert">{batchError}</p>}
+        <div style={{overflowX: "auto"}}><table className="admin-table"><thead><tr><th>Thời gian / mã lô</th><th>Nguồn hàng</th><th>Sản phẩm</th><th>Phương thức</th><th>Nhập / trùng / lỗi</th><th>Giá vốn (VND)</th></tr></thead><tbody>
+          {batches.filter(b => b.supplierName.toLowerCase().includes(batchFilter.trim().toLowerCase())).map(b => <tr key={b.id}>
+            <td>{new Date(b.createdAtUtc).toLocaleString("vi-VN")}<br />{b.reference || b.id.slice(0,8)}</td><td>{b.supplierName}</td><td>{productName(b.productId)}</td><td>{b.method}</td><td>{b.imported} / {b.duplicates} / {b.invalid}</td><td>{b.unitCostVnd == null ? "Chưa khai báo" : (b.unitCostVnd * b.imported).toLocaleString("vi-VN")}</td>
+          </tr>)}
+        </tbody></table></div>
+        {!batches.length && !batchError && <p className="muted">Chưa có lô nhập được ghi nhận.</p>}
+      </section>}
+
+      {isSupplier && <SupplierDirectory products={products} />}
+      {isSupplier && <section className="card admin-form">
+        <h2>Kết nối API — Kinguin</h2>
+        <p className="muted">Tích hợp riêng đã cấu hình. Mock chỉ mô phỏng; chưa hỗ trợ nhập key thật.</p>
+        <button type="button" className="btn btn-secondary" onClick={() => setShowKinguin(v => !v)}>{showKinguin ? "Ẩn công cụ Kinguin" : "Mở công cụ Kinguin"}</button>
+      </section>}
+      {isSupplier && showKinguin && <section className="card admin-form license-form">
+            {loading && <p role="status">Đang tải sản phẩm...</p>}
+            <label>Tìm sản phẩm trong Catalog
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên game hoặc slug" disabled={!!mockRequest || mockBusy} />
+            </label>
+            <label>Sản phẩm đang mở bán
+              <select required value={productId} onChange={e => changeProduct(e.target.value)} disabled={loading || !!mockRequest || mockBusy}>
+                <option value="">Chọn sản phẩm</option>
+                {selectedProduct && !filteredProducts.some(p => p.id === productId) && <option value={productId}>{selectedProduct.name}</option>}
+                {filteredProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+            <label className="license-test-toggle"><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} disabled={!!mockRequest || mockBusy} /> Hiện sản phẩm kiểm thử (theo tên/slug)</label>
+            <p className="muted">Nguồn: Catalog Service · {filteredProducts.length} sản phẩm phù hợp.</p>
+            {selectedProduct && <p className="muted">Tồn kho nội bộ: {selectedInventory?.available ?? 0} key khả dụng.</p>}
+            {productId && (
+              <section className="card">
+                <h3>Kinguin — tra cứu nhà cung cấp</h3>
+                <p className="muted">Đối chiếu UUID sản phẩm DLM với Supplier Product ID đã cấu hình. Mock chỉ tạo dữ liệu thử nghiệm, không mua key thật.</p>
+                <label>Số lượng
+                  <select value={supplierQuantity} disabled={!!mockRequest || mockBusy} onChange={(e) => { setSupplierQuote(null); setSupplierRefresh(0); setSupplierQuantity(Number(e.target.value)); }}>
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+                <button type="button" disabled={supplierLoading || mockBusy || !!mockRequest} onClick={() => setSupplierRefresh((v) => v + 1)}>
+                  {supplierLoading ? "Đang tra cứu..." : "Tra cứu giá và tồn kho Kinguin"}
+                </button>
+                {supplierError && <p role="status">{supplierError}</p>}
+                {(supplierQuote?.mode === "Mock" || mockRequest) && (
+                  <div aria-live="polite">
+                    <p className="muted">Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật.</p>
+                    <button type="button" disabled={mockBusy || !!mockResult || (!mockRequest && (supplierLoading || supplierQuote?.mode !== "Mock" || !supplierQuote.canFulfill))} onClick={submitMockOrder}>
+                      {mockRequest ? "Gửi lại cùng Request ID" : "Tạo đơn mua mô phỏng"}
+                    </button>
+                    {mockRequest && <>
+                      <p>Request ID: <code>{mockRequest.id}</code></p>
+                      <p className="muted">Lưu mã này để tra cứu lại khi chuyển trang.</p>
+                      <button type="button" disabled={mockBusy} onClick={refreshMockOrder}>Kiểm tra trạng thái</button>
+                      <button type="button" disabled={mockBusy || mockResult?.status === "MOCK_PENDING" || !mockResult} onClick={() => { setMockRequest(null); setMockResult(null); setMockError(""); }}>Đơn thử nghiệm mới</button>
+                    </>}
+                    {mockResult && <p>{mockResult.status} · {mockResult.quantity} key · {mockResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
+                    {mockError && <p role="status">{mockError}</p>}
+                  </div>
+                )}
+
+                {supplierQuote && (
+                  <div aria-live="polite">
+                    <p><strong>{supplierQuote.mode === "Mock" ? "MOCK — Dữ liệu mô phỏng" : "SANDBOX — Chỉ tra cứu"}</strong></p>
+                    <p>Mã sản phẩm nhà cung cấp: {supplierQuote.supplierProductId}</p>
+                    {supplierQuote.quote ? <>
+                      <p>Giá tham khảo: {supplierQuote.quote.price.toFixed(2)} {supplierQuote.currency}</p>
+                      <p>Text key khả dụng theo báo giá: {supplierQuote.quote.textQty}</p>
+                      <p>{supplierQuote.canFulfill ? "Đủ theo báo giá" : "Không đủ theo báo giá"}</p>
+                      {supplierQuote.estimatedCost !== null && <p>Ước tính: {supplierQuote.estimatedCost.toFixed(2)} {supplierQuote.currency}</p>}
+                    </> : <p>Không tìm thấy sản phẩm nhà cung cấp.</p>}
+                    <p className="muted">Không bảo đảm giá hoặc tồn kho khi mua thực tế.</p>
+                  </div>
+                )}
+              </section>
+            )}
+
+        <section className="card">
+          <h3>Tra cứu lại đơn mô phỏng</h3>
+          <label>Request ID<input value={lookupId} onChange={e => { setLookupId(e.target.value); setLookupResult(null); setLookupError(""); }} disabled={lookupBusy} placeholder="UUID của đơn mô phỏng" /></label>
+          <button type="button" className="btn btn-secondary" disabled={lookupBusy || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lookupId.trim())} onClick={async () => {
+            setLookupBusy(true); setLookupResult(null); setLookupError("");
+            try { setLookupResult(await getKinguinMockOrder(lookupId.trim())); }
+            catch (e) { setLookupError(e instanceof Error ? e.message : "Không tìm thấy đơn mô phỏng"); }
+            finally { setLookupBusy(false); }
+          }}>{lookupBusy ? "Đang tải..." : "Kiểm tra trạng thái"}</button>
+          {lookupError && <p role="alert">{lookupError}</p>}
+          {lookupResult && <p role="status">{lookupResult.status} · {lookupResult.quantity} key · {lookupResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
+        </section>
+      </section>}
+
+      {isInventory && <>
       <div className="card admin-table-container">
         <div className="row admin-toolbar">
           <h2>Tồn kho theo sản phẩm</h2>
@@ -719,11 +862,12 @@ export function LicensePage() {
           </button>
         </div>
 
+        <label>Tìm trong kho <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên hoặc mã sản phẩm" /></label>
         {loading ? (
           <p className="muted">Đang tải tồn kho...</p>
-        ) : inventory.length === 0 ? (
+        ) : filteredInventory.length === 0 ? (
           <p className="muted">
-            Kho chưa có License Key.
+            Không tìm thấy tồn kho phù hợp.
           </p>
         ) : (
           <table className="admin-table">
@@ -739,7 +883,7 @@ export function LicensePage() {
             </thead>
 
             <tbody>
-              {inventory.map((item) => (
+              {filteredInventory.map((item) => (
                 <tr key={item.productId}>
                   <td>
                     <strong>
@@ -793,6 +937,7 @@ export function LicensePage() {
           </p>
         )}
 
+        <label>Trạng thái <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">Tất cả</option><option value="AVAILABLE">Khả dụng</option><option value="ASSIGNED">Đã cấp phát</option><option value="DISABLED">Vô hiệu hóa</option></select></label>
         {detailError && (
           <div className="alert">{detailError}</div>
         )}
@@ -803,16 +948,16 @@ export function LicensePage() {
           </p>
         ) : loadingKeys ? (
           <p className="muted">Đang tải...</p>
-        ) : licenses.length === 0 ? (
+        ) : filteredLicenses.length === 0 ? (
           !detailError && (
             <p className="muted">
-              Sản phẩm chưa có License Key.
+              Không có license phù hợp.
             </p>
           )
         ) : (
           <>
             <p className="muted">
-              Hiển thị {licenses.length} bản ghi,
+              Hiển thị {filteredLicenses.length} bản ghi,
               tối đa 1.000 Key.
             </p>
 
@@ -828,7 +973,7 @@ export function LicensePage() {
               </thead>
 
               <tbody>
-                {licenses.map((license) => (
+                {filteredLicenses.map((license) => (
                   <tr key={license.id}>
                     <td>
                       <code title={license.id}>
@@ -888,6 +1033,7 @@ export function LicensePage() {
           </>
         )}
       </div>
+      </>}
     </div>
   );
 }

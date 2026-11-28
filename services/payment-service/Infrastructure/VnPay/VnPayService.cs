@@ -52,6 +52,33 @@ public sealed class VnPayService(IOptions<VnPayOptions> options)
         return $"{O.PayUrl.TrimEnd('?')}?{query}&vnp_SecureHash={Hmac(query)}";
     }
 
+    public string CreateWalletTopUpUrl(WalletTopUp topUp, string clientIp)
+    {
+        var now = topUp.CreatedAtUtc.AddHours(7);
+
+        var p = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["vnp_Version"] = "2.1.0",
+            ["vnp_Command"] = "pay",
+            ["vnp_TmnCode"] = O.TmnCode,
+            ["vnp_Amount"] = ToVnpAmount(topUp.Amount)
+                .ToString(CultureInfo.InvariantCulture),
+            ["vnp_CreateDate"] = Fmt(now),
+            ["vnp_ExpireDate"] = Fmt(topUp.ExpiresAtUtc.AddHours(7)),
+            ["vnp_CurrCode"] = "VND",
+            ["vnp_IpAddr"] = clientIp,
+            ["vnp_Locale"] = O.Locale,
+            ["vnp_OrderInfo"] = $"Nap tien vi DLM {topUp.Id:N}",
+            ["vnp_OrderType"] = "other",
+            ["vnp_ReturnUrl"] = O.ReturnUrl,
+            ["vnp_TxnRef"] = topUp.PaymentRef
+                ?? throw new InvalidOperationException("PaymentRef is empty")
+        };
+
+        var query = BuildQuery(p);
+        return $"{O.PayUrl.TrimEnd('?')}?{query}&vnp_SecureHash={Hmac(query)}";
+    }
+
     public bool ValidateMerchant(string tmnCode) =>
         !string.IsNullOrWhiteSpace(tmnCode) &&
         string.Equals(

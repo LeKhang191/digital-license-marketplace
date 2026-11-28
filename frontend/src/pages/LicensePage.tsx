@@ -1,6 +1,7 @@
 import { inventoryRows, stockLevel, stockValuation } from "./inventoryMetrics";
 import { InventoryReplacementHistory } from "./InventoryReplacementHistory";
 import { vnd } from "../components/format";
+import { RefreshButton } from "../components/RefreshButton";
 import { ReceiptDialog, type ReceiptData } from "../components/ReceiptDialog";
 
 import { useEffect, useRef, useState } from "react";
@@ -16,7 +17,6 @@ import { listProducts } from "../api/products";
 import {
   listLicenseInventory,
   listProductLicenses,
-  importLicenses,
   importLicenseFile,
   disableLicense,
   getKinguinQuote,
@@ -165,9 +165,6 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [isSupplier, ready, isLicenseCoordinator, productId, supplierQuantity, supplierRefresh, showKinguin, kinguinTab, integrationBusy]);
 
-  const [mode, setMode] = useState<"manual" | "file">("manual");
-
-  const [rawKeys, setRawKeys] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileVersion, setFileVersion] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -344,11 +341,6 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     }
   );
 
-  const manualKeys = rawKeys
-    .split(/\r?\n/)
-    .map((key) => key.trim())
-    .filter(Boolean);
-
   function productName(id: string) {
     return products.find((p) => p.id === id)?.name
       ?? `Sản phẩm ${id.slice(0, 8)} (không mở bán)`;
@@ -358,17 +350,6 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     if (mockRequest || mockBusy || integrationBusy) return;
     setSupplierQuote(null);
     setProductId(id);
-    setRawKeys("");
-    setFile(null);
-    setFileVersion((v) => v + 1);
-    setResult(null);
-    setError("");
-    setSuccess("");
-  }
-
-  function changeMode(value: "manual" | "file") {
-    setMode(value);
-    setRawKeys("");
     setFile(null);
     setFileVersion((v) => v + 1);
     setResult(null);
@@ -392,36 +373,23 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
       return;
     }
 
-    if (mode === "manual") {
-      if (manualKeys.length === 0) {
-        setError("Vui lòng nhập ít nhất một Key.");
-        return;
-      }
-
-      if (manualKeys.length > 1000) {
-        setError("Chỉ được nhập tối đa 1.000 Key mỗi lần.");
-        return;
-      }
+    if (previewLoading || !preview || preview.candidates === 0 || previewError) {
+      setError("Vui lòng kiểm tra file trước khi nhập kho.");
+      return;
+    }
+    if (!file) {
+      setError("Vui lòng chọn file CSV hoặc TXT.");
+      return;
     }
 
-    if (mode === "file") {
-      if (previewLoading || !preview || preview.candidates === 0 || previewError) {
-        setError("Vui lòng kiểm tra file trước khi nhập kho."); return;
-      }
-      if (!file) {
-        setError("Vui lòng chọn file CSV hoặc TXT.");
-        return;
-      }
+    if (!/\.(csv|txt)$/i.test(file.name)) {
+      setError("Chỉ hỗ trợ file CSV và TXT.");
+      return;
+    }
 
-      if (!/\.(csv|txt)$/i.test(file.name)) {
-        setError("Chỉ hỗ trợ file CSV và TXT.");
-        return;
-      }
-
-      if (file.size === 0 || file.size > 1048576) {
-        setError("File phải có dữ liệu và không vượt quá 1 MB.");
-        return;
-      }
+    if (file.size === 0 || file.size > 1048576) {
+      setError("File phải có dữ liệu và không vượt quá 1 MB.");
+      return;
     }
 
     const cost = unitCost.trim() ? Number(unitCost) : undefined;
@@ -432,14 +400,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     setBusy(true);
 
     try {
-      const response =
-        mode === "manual"
-          ? await importLicenses({
-              productId,
-              keys: manualKeys,
-              ...metadata,
-            })
-          : await importLicenseFile(productId, file!, metadata);
+      const response = await importLicenseFile(productId, file, metadata);
 
       setResult(response);
       setSourceRef("");
@@ -448,7 +409,6 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
         `Đã nhập thành công ${response.imported} Key.`
       );
 
-      setRawKeys("");
       setFile(null);
       setFileVersion((v) => v + 1);
 
@@ -584,8 +544,8 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
         className="card admin-form"
         onSubmit={handleImport}
       >
-        <h2>Nhập License Key</h2>
-        <p className="muted">Chọn nguồn hàng bất kỳ; không cần API nhà cung cấp. Chỉ nhập key hợp pháp hoặc key demo được đánh dấu rõ.</p>
+        <h2>Nhập lô License Key từ file (CSV / TXT)</h2>
+        <p className="muted">Chức năng nhập tay từng key đã được tắt để đảm bảo kiểm toán lô hàng. Vui lòng chọn nguồn hàng và tải lên file CSV/TXT từ nhà cung cấp, hoặc nhập qua API tại mục Nhà cung cấp.</p>
 
         <fieldset disabled={busy || loading}>
           <div className="license-form">
@@ -619,58 +579,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
               </p>
             )}
 
-            <div className="row">
-              <button
-                type="button"
-                className={
-                  mode === "manual"
-                    ? "btn"
-                    : "btn btn-secondary"
-                }
-                onClick={() => changeMode("manual")}
-              >
-                Nhập thủ công
-              </button>
-
-              <button
-                type="button"
-                className={
-                  mode === "file"
-                    ? "btn"
-                    : "btn btn-secondary"
-                }
-                onClick={() => changeMode("file")}
-              >
-                Nhập từ file
-              </button>
-            </div>
-
-            {mode === "manual" ? (
-              <label>
-                Danh sách License Key
-
-                <textarea
-                  rows={7}
-                  value={rawKeys}
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(e) =>
-                    setRawKeys(e.target.value)
-                  }
-                  placeholder={
-                    "DEMO-KEY-00001\n" +
-                    "DEMO-KEY-00002\n" +
-                    "DEMO-KEY-00003"
-                  }
-                />
-
-                <span className="muted">
-                  Mỗi dòng một Key.
-                  {` ${manualKeys.length}/1000 Key`}
-                </span>
-              </label>
-            ) : (
-              <div className="license-file-panel">
+            <div className="license-file-panel">
                 <div className="license-dropzone"
                   onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = busy || loading ? "none" : "copy"; }}
                   onDrop={e => { e.preventDefault(); if (!busy && !loading && e.dataTransfer.files.length) { setFileVersion(v => v + 1); chooseFile(e.dataTransfer.files[0]); } }}>
@@ -711,7 +620,6 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                   <small className="muted">Ước tính tại trình duyệt. Server kiểm tra key trùng trong kho và xác nhận số lượng nhập thực tế.</small>
                 </div>}
               </div>
-            )}
 
             <div className="row">
               <button
@@ -722,14 +630,12 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                   loading ||
                   !selectedProduct?.isActive ||
                   sourcesLoading || !!sourcesError || !sources.some(s => s.id === sourceId && s.isActive) ||
-                  (mode === "manual"
-                    ? manualKeys.length === 0
-                    : !file || previewLoading || !preview || !!previewError || preview.candidates === 0)
+                  !file || previewLoading || !preview || !!previewError || preview.candidates === 0
                 }
               >
                 {busy
                   ? "Đang xử lý..."
-                  : "Nhập key vào kho"}
+                  : "Nhập lô key vào kho"}
               </button>
             </div>
           </div>
@@ -838,7 +744,13 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
               {!canFulfillQty && <p role="status">Không đủ tồn kho cho số lượng đã chọn.</p>}
             </div>;
           })()}
-          <button type="button" className="btn btn-secondary kinguin-refresh" disabled={supplierLoading || mockBusy || !!mockRequest || integrationBusy} onClick={() => setSupplierRefresh(v => v + 1)}>Làm mới báo giá</button>
+          <RefreshButton
+            className="kinguin-refresh"
+            title="Làm mới báo giá"
+            loading={supplierLoading}
+            disabled={mockBusy || !!mockRequest || integrationBusy}
+            onClick={() => setSupplierRefresh(v => v + 1)}
+          />
                 {(supplierQuote?.mode === "Mock" || mockRequest) && (
                   <div className="kinguin-order" aria-live="polite">
                     <p className="muted">{supplierQuote?.demoAutoImport ? "Nhập kho demo tự động · Không dùng tiền thật · Key không thể kích hoạt." : "Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật."}</p>
@@ -956,41 +868,16 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
 
           <span className="spacer" />
 
-          <button
-            type="button"
-            className="refresh-btn"
+          <RefreshButton
             title="Làm mới dữ liệu"
-            aria-label="Làm mới dữ liệu"
-            aria-busy={loading || loadingKeys}
-            disabled={busy || loading || loadingKeys}
+            loading={loading || loadingKeys}
+            disabled={busy}
             onClick={() => {
               setError("");
               setSuccess("");
               setRefreshVersion((v) => v + 1);
             }}
-          >
-            <svg
-              className={
-                loading || loadingKeys
-                  ? "refresh-icon spinning"
-                  : "refresh-icon"
-              }
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M20 7v5h-5" />
-              <path d="M4 17v-5h5" />
-              <path d="M6.1 6.1A8.3 8.3 0 0 1 20 12" />
-              <path d="M4 12a8.3 8.3 0 0 0 13.9 5.9" />
-            </svg>
-          </button>
+          />
         </div>
 
         <label>Tìm trong kho <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên hoặc mã sản phẩm" /></label>

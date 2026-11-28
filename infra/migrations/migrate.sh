@@ -26,7 +26,7 @@ case "${1:-}" in
         echo "[Migration] Updating Order database..."
 
         EF_MIGRATIONS_CONNECTION="$ORDER_CONNECTION" \
-        dotnet ef database update "${2:-}" \
+        dotnet ef database update ${2:+"$2"} \
             --project services/order-service/Order.Api.csproj \
             --startup-project services/order-service/Order.Api.csproj \
             --context OrderDbContext \

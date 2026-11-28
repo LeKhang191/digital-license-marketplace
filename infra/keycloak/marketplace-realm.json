@@ -26,6 +26,10 @@
         "description": "Kiểm toán giao dịch và hoàn tiền"
       },
       {
+        "name": "partner_api",
+        "description": "Đối tác B2B tích hợp qua Partner API"
+      },
+      {
         "name": "admin",
         "description": "Legacy role - temporary compatibility"
       }

@@ -22,6 +22,15 @@ public sealed class OrderDbContext(
     public DbSet<FulfillmentResult> FulfillmentResults =>
         Set<FulfillmentResult>();
 
+    public DbSet<PartnerOrderRequest> PartnerOrderRequests =>
+        Set<PartnerOrderRequest>();
+
+    public DbSet<PartnerWebhookEndpoint> PartnerWebhookEndpoints =>
+        Set<PartnerWebhookEndpoint>();
+
+    public DbSet<PartnerWebhookDelivery> PartnerWebhookDeliveries =>
+        Set<PartnerWebhookDelivery>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
@@ -178,6 +187,109 @@ public sealed class OrderDbContext(
         {
             x.PublishedAtUtc,
             x.NextRetryAtUtc
+        });
+
+        var partnerReq = modelBuilder.Entity<PartnerOrderRequest>();
+
+        partnerReq.ToTable("partner_order_requests");
+        partnerReq.HasKey(x => x.Id);
+
+        partnerReq.Property(x => x.PartnerId)
+            .HasMaxLength(48)
+            .IsRequired();
+
+        partnerReq.Property(x => x.IdempotencyKey)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        partnerReq.Property(x => x.RequestHash)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        partnerReq.Property(x => x.ExternalReference)
+            .HasMaxLength(128);
+
+        partnerReq.HasIndex(x => new
+        {
+            x.PartnerId,
+            x.IdempotencyKey
+        }).IsUnique();
+
+        partnerReq.HasIndex(x => x.OrderId)
+            .IsUnique();
+
+        partnerReq.HasOne<Order>()
+            .WithOne()
+            .HasForeignKey<PartnerOrderRequest>(x => x.OrderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        var webhook = modelBuilder.Entity<PartnerWebhookEndpoint>();
+
+        webhook.ToTable("partner_webhook_endpoints");
+        webhook.HasKey(x => x.PartnerId);
+
+        webhook.Property(x => x.PartnerId)
+            .HasMaxLength(48)
+            .IsRequired();
+
+        webhook.Property(x => x.CallbackUrl)
+            .HasMaxLength(500)
+            .IsRequired();
+
+        webhook.Property(x => x.SigningSecret)
+            .HasMaxLength(128)
+            .IsRequired();
+
+        var delivery = modelBuilder.Entity<PartnerWebhookDelivery>();
+
+        delivery.ToTable("partner_webhook_deliveries", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_partner_webhook_deliveries_status",
+                "\"Status\" IN ('PENDING', 'DELIVERED', 'FAILED', 'SKIPPED')");
+
+            table.HasCheckConstraint(
+                "CK_partner_webhook_deliveries_event",
+                "\"EventType\" IN ('partner.order.completed', 'partner.order.refunded')");
+        });
+
+        delivery.HasKey(x => x.Id);
+
+        delivery.Property(x => x.PartnerId)
+            .HasMaxLength(48)
+            .IsRequired();
+
+        delivery.Property(x => x.EventType)
+            .HasMaxLength(40)
+            .IsRequired();
+
+        delivery.Property(x => x.Payload)
+            .HasColumnType("jsonb")
+            .IsRequired();
+
+        delivery.Property(x => x.Status)
+            .HasMaxLength(20)
+            .IsRequired();
+
+        delivery.Property(x => x.LastError)
+            .HasMaxLength(500);
+
+        delivery.HasIndex(x => new
+        {
+            x.OrderId,
+            x.EventType
+        }).IsUnique();
+
+        delivery.HasIndex(x => new
+        {
+            x.Status,
+            x.NextRetryAtUtc
+        });
+
+        delivery.HasIndex(x => new
+        {
+            x.PartnerId,
+            x.CreatedAtUtc
         });
     }
 }

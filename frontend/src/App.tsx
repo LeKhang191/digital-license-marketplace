@@ -4,6 +4,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { CartProvider } from "./cart/CartContext";
 import { Navbar } from "./components/Navbar";
+import { LanguageSwitcher } from "./components/LanguageSwitcher";
 
 import { RoleGuard } from "./auth/RoleGuard";
 import { Roles } from "./auth/roles";
@@ -18,6 +19,7 @@ import { PaymentResultPage } from "./pages/PaymentResultPage";
 import { AdminPage } from "./pages/AdminPage";
 import { LicensePage } from "./pages/LicensePage";
 import { TransactionsPage } from "./pages/TransactionsPage";
+import { SupportPage } from "./pages/SupportPage";
 import { ForbiddenPage } from "./pages/ForbiddenPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
@@ -116,6 +118,24 @@ export default function App() {
           }
         />
 
+        {/* Support Center (Customer + Staff roles) */}
+
+        <Route
+          path="/support"
+          element={
+            <RoleGuard
+              allowedRoles={[
+                Roles.CUSTOMER,
+                Roles.LICENSE_COORDINATOR,
+                Roles.TRANSACTION_AUDITOR,
+                Roles.CATALOG_MANAGER,
+              ]}
+            >
+              <SupportPage />
+            </RoleGuard>
+          }
+        />
+
         {/* Error routes */}
 
         <Route
@@ -128,6 +148,7 @@ export default function App() {
           element={<NotFoundPage />}
         />
       </Routes>
+      <LanguageSwitcher />
     </CartProvider>
   );
 }

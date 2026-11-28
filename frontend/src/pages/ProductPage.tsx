@@ -7,11 +7,13 @@ import { useAuth } from "../auth/AuthProvider";
 import { useCart } from "../cart/CartContext";
 import { ProductArtwork } from "../components/ProductCard";
 import { vnd } from "../components/format";
+import { useLanguage } from "../i18n/LanguageContext";
 
 export function ProductPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addItem } = useCart();
+  const { t } = useLanguage();
 
   const {
     ready,
@@ -88,14 +90,14 @@ export function ProductPage() {
     <div className="container">
       <div className="product-back">
         <Link to="/" className="btn btn-secondary">
-          ← Quay về cửa hàng
+          {t("← Quay về cửa hàng", "← Back to Store")}
         </Link>
       </div>
 
       {error && !product ? (
         <div className="alert">{error}</div>
       ) : !product ? (
-        <p className="muted">Đang tải...</p>
+        <p className="muted">{t("Đang tải...", "Loading...")}</p>
       ) : (
         <>
         <div className="detail-layout">
@@ -108,7 +110,7 @@ export function ProductPage() {
           <h1>{product.name}</h1>
 
           <p>
-            {product.description || "Chưa có mô tả."}
+            {product.description || t("Chưa có mô tả.", "No description available.")}
           </p>
 
           <p className="price" style={{ fontSize: 24 }}>
@@ -117,49 +119,50 @@ export function ProductPage() {
 
           {!ready ? (
             <p className="muted">
-              Đang kiểm tra quyền truy cập...
+              {t("Đang kiểm tra quyền truy cập...", "Checking permissions...")}
             </p>
           ) : canPurchase ? (
             <>
-              <div className="row">
+              <div className="purchase-actions">
                 <div className="quantity-control">
-                  <label htmlFor="purchase-quantity">Số lượng</label>
+                  <label htmlFor="purchase-quantity">{t("Số lượng", "Quantity")}</label>
                   <div className="quantity-stepper">
-                    <button type="button" aria-label="Giảm số lượng" disabled={quantity <= 1}
+                    <button type="button" aria-label={t("Giảm số lượng", "Decrease quantity")} disabled={quantity <= 1}
                       onClick={() => setQuantity(n => Math.max(1, n - 1))}>−</button>
                     <input id="purchase-quantity" type="number" min={1} max={10} step={1}
                       value={quantity}
                       onChange={e => setQuantity(Math.min(10, Math.max(1, Math.trunc(Number(e.target.value) || 1))))} />
-                    <button type="button" aria-label="Tăng số lượng" disabled={quantity >= 10}
+                    <button type="button" aria-label={t("Tăng số lượng", "Increase quantity")} disabled={quantity >= 10}
                       onClick={() => setQuantity(n => Math.min(10, n + 1))}>+</button>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  className="btn"
+                  className="btn purchase-btn"
                   onClick={buyNow}
                 >
-                  Mua ngay
+                  {t("Mua ngay", "Buy Now")}
                 </button>
 
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="btn btn-secondary purchase-btn"
                   onClick={addToCart}
                 >
-                  Thêm vào giỏ
+                  {t("Thêm vào giỏ", "Add to Cart")}
                 </button>
               </div>
 
               <div className="cart-added-slot" role="status">
                 <div className="cart-added-inline" hidden={!addedNotice}>
-                  Đã thêm vào giỏ hàng. <Link to="/cart">Xem giỏ hàng →</Link>
+                  {t("Đã thêm vào giỏ hàng.", "Added to cart.")}{" "}
+                  <Link to="/cart">{t("Xem giỏ hàng →", "View cart →")}</Link>
                 </div>
               </div>
 
               <div className="purchase-total" aria-live="polite">
-                <strong>Tổng thanh toán: </strong>
+                <strong>{t("Tổng thanh toán:", "Total:")} </strong>
 
                 <span
                   className="price"
@@ -171,8 +174,10 @@ export function ProductPage() {
             </>
           ) : (
             <p className="muted">
-              Tài khoản nhân viên chỉ được xem
-              thông tin sản phẩm.
+              {t(
+                "Tài khoản nhân viên chỉ được xem thông tin sản phẩm.",
+                "Staff accounts have view-only access to products.",
+              )}
             </p>
           )}
 

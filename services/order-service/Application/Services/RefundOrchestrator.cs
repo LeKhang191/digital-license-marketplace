@@ -139,6 +139,35 @@ public sealed class RefundOrchestrator(
                         {
                             Advance(operation, "REJECTED");
                             operation.LastError = error;
+
+                            var reasonText = error switch
+                            {
+                                "LICENSE_ALREADY_REVEALED" =>
+                                    "Key bản quyền đã được mở xem nên không đủ điều kiện hoàn tiền đơn chưa mở key.",
+                                "ORDER_ALREADY_COMPENSATED" =>
+                                    "Đơn hàng đã được đổi key mới trước đó nên không thể hoàn tiền lại.",
+                                "DEFECT_REFUND_NOT_ELIGIBLE" =>
+                                    "Đơn hàng không đủ điều kiện hoàn tiền key lỗi (chỉ áp dụng cho đơn 1 key đã mở xem).",
+                                _ => "Đơn hàng không đủ điều kiện hoàn tiền theo chính sách."
+                            };
+
+                            db.OutboxMessages.Add(new OutboxMessage
+                            {
+                                AggregateId = operation.RequestId,
+                                RoutingKey = EventRoutes.RefundRejected,
+                                Payload = JsonSerializer.Serialize(
+                                    new OrderRefundRejectedEvent(
+                                        order.Id,
+                                        order.KeycloakUserId,
+                                        order.CustomerEmail,
+                                        order.TotalAmount,
+                                        order.CustomerEmailVerified,
+                                        reasonText),
+                                    new JsonSerializerOptions(
+                                        JsonSerializerDefaults.Web)),
+                                CreatedAtUtc = DateTime.UtcNow,
+                                NextRetryAtUtc = DateTime.UtcNow
+                            });
                         }
                         else
                         {
@@ -246,6 +275,9 @@ public sealed class RefundOrchestrator(
                         CreatedAtUtc = DateTime.UtcNow,
                         NextRetryAtUtc = DateTime.UtcNow
                     });
+
+                    await PartnerWebhookHelper.TryEnqueueAsync(
+                        db, order, PartnerWebhookEvents.OrderRefunded, ct);
 
                     Advance(operation, "COMPLETED");
 

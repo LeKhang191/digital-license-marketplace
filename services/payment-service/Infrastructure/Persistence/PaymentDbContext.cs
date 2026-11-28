@@ -17,6 +17,11 @@ public sealed class PaymentDbContext(
     public DbSet<WalletTransaction> WalletTransactions =>
         Set<WalletTransaction>();
 
+    public DbSet<PartnerWalletTopUp> PartnerWalletTopUps =>
+        Set<PartnerWalletTopUp>();
+
+    public DbSet<WalletTopUp> WalletTopUps =>
+        Set<WalletTopUp>();
 
     public DbSet<OutboxMessage> OutboxMessages =>
         Set<OutboxMessage>();
@@ -171,7 +176,7 @@ public sealed class PaymentDbContext(
 
             table.HasCheckConstraint(
                 "CK_wallet_transactions_type",
-                "\"Type\" IN ('REFUND', 'PURCHASE')");
+                "\"Type\" IN ('REFUND', 'PURCHASE', 'TOPUP')");
         });
 
         ledger.HasKey(x => x.Id);
@@ -202,6 +207,108 @@ public sealed class PaymentDbContext(
             .WithMany()
             .HasForeignKey(x => x.WalletId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        var topUp = modelBuilder.Entity<PartnerWalletTopUp>();
+
+        topUp.ToTable("partner_wallet_topups", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_partner_wallet_topups_amount",
+                "\"Amount\" > 0");
+
+            table.HasCheckConstraint(
+                "CK_partner_wallet_topups_balance",
+                "\"BalanceAfter\" >= 0");
+        });
+
+        topUp.HasKey(x => x.Id);
+
+        topUp.Property(x => x.PartnerId)
+            .HasMaxLength(48)
+            .IsRequired();
+
+        topUp.Property(x => x.IdempotencyKey)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        topUp.Property(x => x.Amount)
+            .HasPrecision(18, 2);
+
+        topUp.Property(x => x.BalanceAfter)
+            .HasPrecision(18, 2);
+
+        topUp.Property(x => x.Note)
+            .HasMaxLength(500);
+
+        topUp.Property(x => x.RequestedBy)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        topUp.HasIndex(x => new
+        {
+            x.PartnerId,
+            x.IdempotencyKey
+        }).IsUnique();
+
+        topUp.HasIndex(x => new
+        {
+            x.PartnerId,
+            x.CreatedAtUtc
+        });
+
+        topUp.HasOne<WalletTransaction>()
+            .WithMany()
+            .HasForeignKey(x => x.WalletTransactionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        var customerTopUp = modelBuilder.Entity<WalletTopUp>();
+
+        customerTopUp.ToTable("wallet_topups", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_wallet_topups_amount",
+                "\"Amount\" > 0");
+
+            table.HasCheckConstraint(
+                "CK_wallet_topups_status",
+                "\"Status\" IN ('PENDING', 'SUCCEEDED', 'FAILED')");
+        });
+
+        customerTopUp.HasKey(x => x.Id);
+
+        customerTopUp.Property(x => x.CustomerId)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        customerTopUp.Property(x => x.Amount)
+            .HasPrecision(18, 2);
+
+        customerTopUp.Property(x => x.PaymentRef)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        customerTopUp.Property(x => x.Status)
+            .HasMaxLength(20)
+            .IsRequired();
+
+        customerTopUp.Property(x => x.VnpTransactionNo)
+            .HasMaxLength(32);
+
+        customerTopUp.Property(x => x.VnpPayDate)
+            .HasMaxLength(14);
+
+        customerTopUp.HasIndex(x => x.PaymentRef)
+            .IsUnique();
+
+        customerTopUp.HasIndex(x => x.VnpTransactionNo)
+            .IsUnique()
+            .HasFilter("\"VnpTransactionNo\" IS NOT NULL");
+
+        customerTopUp.HasIndex(x => new
+        {
+            x.CustomerId,
+            x.CreatedAtUtc
+        });
 
         var outbox = modelBuilder.Entity<OutboxMessage>();
 

@@ -1,0 +1,54 @@
+# Compose overlay cho triển khai trực tiếp trên VPS/server bằng Nginx + Let's Encrypt (Certbot)
+# KHÔNG sử dụng Cloudflare Tunnel.
+#
+# Cách chạy:
+#   export COMPOSE_FILE=docker-compose.yml:docker-compose.vps.yml
+#   docker compose up -d
+#
+# Lần đầu xin chứng chỉ TLS:
+#   bash scripts/init-vps-tls.sh
+
+services:
+  gateway:
+    # Thay thế bind 0.0.0.0:8000 của compose gốc thành loopback để Internet chỉ đi qua Nginx (443).
+    ports: !override
+      - "127.0.0.1:8000:8080"
+
+  # Lưu ý: keycloak trong docker-compose.yml đã bind sẵn 127.0.0.1:8081:8080
+  # nên chỉ phục vụ SSH tunnel / kcadm.sh nội bộ, không mở ra Internet.
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on:
+      - gateway
+      - keycloak
+    environment:
+      APP_DOMAIN: "${APP_DOMAIN:?APP_DOMAIN is required (e.g. marketplace.example.com)}"
+      AUTH_DOMAIN: "${AUTH_DOMAIN:?AUTH_DOMAIN is required (e.g. auth.example.com)}"
+      NGINX_ENVSUBST_FILTER: "^(APP_DOMAIN|AUTH_DOMAIN)$"
+    ports:
+      # Mặc định mở 80/443 trực tiếp. Nếu trên homeserver đã có proxy khác chiếm 80/443
+      # (ví dụ discord_nginx của ChitNChat), có thể đặt NGINX_HTTP_BIND=127.0.0.1:8088
+      # và NGINX_HTTPS_BIND=127.0.0.1:8443 rồi forward từ proxy ngoài hoặc Tailscale.
+      - "${NGINX_HTTP_BIND:-80}:80"
+      - "${NGINX_HTTPS_BIND:-443}:443"
+    volumes:
+      - ./infra/nginx/vps/${NGINX_MODE:-site-https}.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - certbot_webroot:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    networks:
+      - backend
+
+  certbot:
+    image: certbot/certbot:latest
+    profiles:
+      - certbot
+    volumes:
+      - certbot_webroot:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+
+volumes:
+  certbot_webroot:
+  certbot_certs:

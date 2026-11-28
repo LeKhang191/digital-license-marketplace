@@ -1,0 +1,36 @@
+# Compose overlay cho triển khai trên homeserver (như khenserver) qua Tailscale Funnel
+# (KHÔNG dùng Cloudflare, KHÔNG cần mở port router).
+#
+# Cách chạy:
+#   export COMPOSE_FILE=docker-compose.yml:docker-compose.tailscale.yml
+#   docker compose up -d
+#   sudo tailscale funnel --bg 8088
+
+services:
+  gateway:
+    # Khóa cổng raw gateway về loopback; mọi lưu lượng public đi qua Nginx -> Funnel.
+    ports: !override
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-8000}:8080"
+
+  keycloak:
+    # Đổi cổng loopback sang 8085 mặc định để tránh đụng Pi-hole (127.0.0.1:8081) trên khenserver.
+    # Keycloak Admin Console chỉ truy cập nội bộ qua SSH tunnel hoặc kcadm.sh.
+    ports: !override
+      - "127.0.0.1:${KEYCLOAK_HOST_PORT:-8085}:8080"
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on:
+      - gateway
+      - keycloak
+    environment:
+      PUBLIC_HOST: "${PUBLIC_HOST:?PUBLIC_HOST is required (e.g. khenserver.tail832918.ts.net)}"
+      NGINX_ENVSUBST_FILTER: "^PUBLIC_HOST$"
+    ports:
+      - "127.0.0.1:${NGINX_FUNNEL_PORT:-8088}:80"
+    volumes:
+      - ./infra/nginx/vps/tailscale-funnel.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    networks:
+      - backend

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Contracts.Events;
 using Marketplace.Shared.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -367,5 +369,215 @@ public sealed class RefundsController(
                MatchesTicket(operation, ticket)
             ? Ok(Response(operation))
             : NotFound();
+    }
+
+    public sealed record UnrevealedSupportRefundRequest(
+        Guid Id,
+        Guid OrderId,
+        string CustomerId,
+        string HandledBy
+    );
+
+    public sealed record RejectSupportRefundNotifyRequest(
+        Guid TicketId,
+        Guid OrderId,
+        string CustomerId,
+        string Reason
+    );
+
+    private static string UnrevealedTicketReason(Guid ticketId)
+        => $"Approved unrevealed refund: ticket {ticketId:D}";
+
+    private static bool MatchesUnrevealedTicket(
+        RefundOperation operation,
+        UnrevealedSupportRefundRequest ticket)
+        => operation.Mode == "UNREVEALED" &&
+           operation.CustomerId == ticket.CustomerId &&
+           operation.RequestedBy == ticket.HandledBy &&
+           operation.Reason == UnrevealedTicketReason(ticket.Id);
+
+    [HttpPost("api/internal/support/tickets/{id:guid}/refund/unrevealed")]
+    [Authorize(Roles = "transaction_auditor")]
+    public async Task<IActionResult> ApproveUnrevealedSupportRefund(
+        Guid id,
+        UnrevealedSupportRefundRequest ticket,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(UserId) ||
+            !new InternalServiceAuth(config).Validate(Request))
+        {
+            return Unauthorized();
+        }
+
+        if (ticket.Id != id ||
+            ticket.OrderId == Guid.Empty ||
+            ticket.HandledBy != UserId ||
+            string.IsNullOrWhiteSpace(ticket.CustomerId))
+        {
+            return BadRequest();
+        }
+
+        await using var tx =
+            await db.Database.BeginTransactionAsync(ct);
+
+        var existing = await LockOperationAsync(ticket.OrderId, ct);
+        var order = await LockOrderAsync(ticket.OrderId, ct);
+
+        if (order is null || ticket.CustomerId != order.KeycloakUserId)
+            return NotFound();
+
+        if (existing is not null && MatchesUnrevealedTicket(existing, ticket))
+        {
+            await tx.CommitAsync(ct);
+            return Ok(Response(existing));
+        }
+
+        if (existing is null)
+        {
+            var concurrent = await db.RefundOperations
+                .AsNoTracking()
+                .SingleOrDefaultAsync(x => x.OrderId == order.Id, ct);
+
+            if (concurrent is not null)
+            {
+                return Conflict(new
+                {
+                    code = concurrent.Status == "REJECTED"
+                        ? (concurrent.LastError ?? "REFUND_ALREADY_REJECTED")
+                        : "REFUND_ALREADY_REQUESTED"
+                });
+            }
+        }
+        else
+        {
+            return Conflict(new
+            {
+                code = existing.Status == "REJECTED"
+                    ? (existing.LastError ?? "REFUND_ALREADY_REJECTED")
+                    : "REFUND_ALREADY_REQUESTED"
+            });
+        }
+
+        if (!await EligibleAsync(order, ct))
+        {
+            return Conflict(new { code = "ORDER_NOT_REFUNDABLE" });
+        }
+
+        var maxDays = config.GetValue("RefundPolicy:UnrevealedWindowDays", 7);
+        if (maxDays > 0 &&
+            order.PaidAtUtc is not null &&
+            DateTime.UtcNow - order.PaidAtUtc.Value > TimeSpan.FromDays(maxDays))
+        {
+            return Conflict(new
+            {
+                code = "REFUND_WINDOW_EXPIRED",
+                maxDays
+            });
+        }
+
+        var operation = new RefundOperation();
+        Initialize(
+            operation,
+            order,
+            "UNREVEALED",
+            UnrevealedTicketReason(ticket.Id),
+            UserId!,
+            null);
+
+        db.RefundOperations.Add(operation);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        return Accepted(Response(operation));
+    }
+
+    [HttpGet("api/internal/support/tickets/{id:guid}/refund/unrevealed")]
+    [Authorize(Roles = "transaction_auditor")]
+    public async Task<IActionResult> GetUnrevealedSupportRefund(
+        Guid id,
+        [FromQuery] Guid orderId,
+        [FromQuery] string customerId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(UserId) ||
+            !new InternalServiceAuth(config).Validate(Request))
+        {
+            return Unauthorized();
+        }
+
+        var ticket = new UnrevealedSupportRefundRequest(
+            id, orderId, customerId, UserId!);
+
+        var operation = await db.RefundOperations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
+
+        return operation is not null && MatchesUnrevealedTicket(operation, ticket)
+            ? Ok(Response(operation))
+            : NotFound();
+    }
+
+    [HttpPost("api/internal/support/tickets/{id:guid}/refund/reject-notify")]
+    [Authorize(Roles = "license_coordinator,transaction_auditor")]
+    public async Task<IActionResult> NotifyRefundRejected(
+        Guid id,
+        RejectSupportRefundNotifyRequest request,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(UserId) ||
+            !new InternalServiceAuth(config).Validate(Request))
+        {
+            return Unauthorized();
+        }
+
+        if (request.TicketId != id ||
+            request.OrderId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(request.CustomerId) ||
+            string.IsNullOrWhiteSpace(request.Reason))
+        {
+            return BadRequest();
+        }
+
+        var order = await db.Orders
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.Id == request.OrderId && x.KeycloakUserId == request.CustomerId,
+                ct);
+
+        if (order is null)
+            return NotFound();
+
+        var alreadyQueued = await db.OutboxMessages.AnyAsync(
+            x => x.AggregateId == request.TicketId &&
+                 x.RoutingKey == EventRoutes.RefundRejected,
+            ct);
+
+        if (!alreadyQueued)
+        {
+            var reason = request.Reason.Trim();
+            if (reason.Length > 500)
+                reason = reason[..500];
+
+            db.OutboxMessages.Add(new OutboxMessage
+            {
+                AggregateId = request.TicketId,
+                RoutingKey = EventRoutes.RefundRejected,
+                Payload = JsonSerializer.Serialize(
+                    new OrderRefundRejectedEvent(
+                        order.Id,
+                        order.KeycloakUserId,
+                        order.CustomerEmail,
+                        order.TotalAmount,
+                        order.CustomerEmailVerified,
+                        reason),
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+                CreatedAtUtc = DateTime.UtcNow,
+                NextRetryAtUtc = DateTime.UtcNow
+            });
+
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Ok(new { queued = true });
     }
 }

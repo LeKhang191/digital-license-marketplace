@@ -23,6 +23,8 @@ builder.Services.AddSingleton<VnPayService>();
 
 builder.Services.AddScoped<PaymentSessionService>();
 builder.Services.AddScoped<WalletService>();
+builder.Services.AddScoped<WalletTopUpService>();
+builder.Services.AddScoped<PartnerWalletService>();
 builder.Services.AddScoped<WalletPaymentService>();
 builder.Services.AddScoped<RefundService>();
 

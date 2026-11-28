@@ -3,7 +3,7 @@ namespace SupportService.Domain.Entities;
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid OrderId { get; set; }
+    public Guid? OrderId { get; set; }
     public Guid? LicenseId { get; set; }
 
     public string CustomerId { get; set; } = "";
@@ -14,6 +14,9 @@ public sealed class SupportTicket
     public string Status { get; set; } = "OPEN";
     public string AssignedRole { get; set; } = "";
     public string? HandledBy { get; set; }
+
+    public string? ResolutionOutcome { get; set; }
+    public string? RejectionReason { get; set; }
 
     public Guid Version { get; set; } = Guid.NewGuid();
 

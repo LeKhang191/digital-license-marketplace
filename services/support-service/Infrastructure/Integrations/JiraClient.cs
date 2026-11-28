@@ -38,7 +38,7 @@ public sealed class JiraClient(IHttpClientFactory clients, IConfiguration config
         requestFieldValues = new
         {
             summary = Marker(ticket.Id) + " " + ticket.Category,
-            description = $"Marketplace escalation. Ticket: {ticket.Id:D}\nCategory: {ticket.Category}\nOrder reference: {ticket.OrderId:D}\nContact marketplace staff for sanitized details."
+            description = $"Marketplace escalation. Ticket: {ticket.Id:D}\nCategory: {ticket.Category}\nOrder reference: {(ticket.OrderId.HasValue ? ticket.OrderId.Value.ToString("D") : "N/A")}\nContact marketplace staff for sanitized details."
         }
     }, ct);
 

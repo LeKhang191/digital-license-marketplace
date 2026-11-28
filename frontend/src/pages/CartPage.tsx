@@ -2,9 +2,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { useCart } from "../cart/CartContext";
 import { vnd } from "../components/format";
+import { useLanguage } from "../i18n/LanguageContext";
 
 export function CartPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { ready, authenticated, isCustomer } = useAuth();
   const { items, totalCount, totalAmount, updateQuantity, removeItem, clearCart } = useCart();
 
@@ -16,11 +18,11 @@ export function CartPage() {
     <div className="container">
       <div className="product-back">
         <Link to="/" className="btn btn-secondary">
-          ← Tiếp tục mua sắm
+          {t("← Tiếp tục mua sắm", "← Continue Shopping")}
         </Link>
       </div>
 
-      <h1>Giỏ hàng</h1>
+      <h1>{t("Giỏ hàng", "Shopping Cart")}</h1>
 
       {items.length === 0 ? (
         <section className="card">

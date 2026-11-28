@@ -76,6 +76,12 @@ public sealed class VnPayIpnHandler(
                 return new("99", "Invalid payment date");
         }
 
+        if (reference.StartsWith(WalletTopUpService.RefPrefix, StringComparison.Ordinal))
+        {
+            return await HandleWalletTopUpAsync(
+                reference, query, success, txNo, payDate, ct);
+        }
+
         try
         {
             await using var transaction =
@@ -150,6 +156,8 @@ public sealed class VnPayIpnHandler(
                 var duplicate = await db.Payments.AnyAsync(
                     p => p.Id != payment.Id &&
                          p.VnpTransactionNo == txNo,
+                    ct) || await db.WalletTopUps.AnyAsync(
+                    t => t.VnpTransactionNo == txNo,
                     ct);
 
                 if (duplicate)
@@ -231,6 +239,165 @@ public sealed class VnPayIpnHandler(
         catch (Exception ex)
         {
             log.LogError(ex, "Payment IPN transaction failed");
+
+            return new("99", "Unknown error");
+        }
+    }
+
+    private async Task<IpnResult> HandleWalletTopUpAsync(
+        string reference,
+        IReadOnlyDictionary<string, string> query,
+        bool success,
+        string txNo,
+        string payDate,
+        CancellationToken ct)
+    {
+        string Get(string key) =>
+            query.TryGetValue(key, out var value)
+                ? value : "";
+
+        try
+        {
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(ct);
+
+            var rows = await db.WalletTopUps
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM wallet_topups
+                    WHERE "PaymentRef" = {reference}
+                    FOR UPDATE
+                    """)
+                .ToListAsync(ct);
+
+            var topUp = rows.SingleOrDefault();
+
+            if (topUp is null)
+                return new("01", "Order not found");
+
+            if (!long.TryParse(
+                    Get("vnp_Amount"),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var amount) ||
+                amount != VnPayService.ToVnpAmount(topUp.Amount))
+            {
+                return new("04", "Invalid amount");
+            }
+
+            var recoverable =
+                success &&
+                topUp.Status == PaymentStatus.Failed &&
+                topUp.PaidAtUtc == null &&
+                string.IsNullOrEmpty(topUp.VnpTransactionNo);
+
+            if (topUp.Status != PaymentStatus.Pending &&
+                !recoverable)
+            {
+                if (success &&
+                    !string.IsNullOrEmpty(topUp.VnpTransactionNo) &&
+                    topUp.VnpTransactionNo != txNo)
+                {
+                    log.LogWarning(
+                        "WalletTopUp {TopUpId} requires reconciliation",
+                        topUp.Id);
+
+                    return new("99", "Payment reconciliation required");
+                }
+
+                return new("02", "Order already confirmed");
+            }
+
+            var now = DateTime.UtcNow;
+
+            if (success)
+            {
+                var lockKey = $"vnpay:transaction:{txNo}";
+
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                    SELECT pg_advisory_xact_lock(
+                        hashtextextended({lockKey}, 0)
+                    )
+                    """, ct);
+
+                var duplicate = await db.Payments.AnyAsync(
+                    p => p.VnpTransactionNo == txNo, ct) ||
+                    await db.WalletTopUps.AnyAsync(
+                        t => t.Id != topUp.Id && t.VnpTransactionNo == txNo, ct);
+
+                if (duplicate)
+                {
+                    log.LogWarning(
+                        "Duplicate provider transaction detected for wallet top-up");
+
+                    return new("99", "Payment reconciliation required");
+                }
+
+                topUp.Status = PaymentStatus.Succeeded;
+                topUp.VnpTransactionNo = txNo;
+                topUp.VnpPayDate = payDate;
+                topUp.PaidAtUtc = now;
+
+                var newWalletId = Guid.NewGuid();
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                    INSERT INTO wallets (
+                        "Id", "CustomerId", "Balance",
+                        "CreatedAtUtc", "UpdatedAtUtc"
+                    )
+                    VALUES (
+                        {newWalletId}, {topUp.CustomerId}, 0, {now}, {now}
+                    )
+                    ON CONFLICT ("CustomerId") DO NOTHING
+                    """, ct);
+
+                var walletRows = await db.Wallets
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM wallets
+                        WHERE "CustomerId" = {topUp.CustomerId}
+                        FOR UPDATE
+                        """)
+                    .ToListAsync(ct);
+
+                var wallet = walletRows.Single();
+                wallet.Balance += topUp.Amount;
+                wallet.UpdatedAtUtc = now;
+
+                db.WalletTransactions.Add(new WalletTransaction
+                {
+                    WalletId = wallet.Id,
+                    Type = WalletTransactionType.TopUp,
+                    Amount = topUp.Amount,
+                    BalanceAfter = wallet.Balance,
+                    ReferenceId = topUp.Id,
+                    CreatedAtUtc = now
+                });
+            }
+            else
+            {
+                topUp.Status = PaymentStatus.Failed;
+            }
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            log.LogInformation(
+                "WalletTopUp {TopUpId}: {Status}",
+                topUp.Id,
+                topUp.Status);
+
+            return new("00", "Confirm Success");
+        }
+        catch (OperationCanceledException)
+            when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Wallet top-up IPN transaction failed");
 
             return new("99", "Unknown error");
         }

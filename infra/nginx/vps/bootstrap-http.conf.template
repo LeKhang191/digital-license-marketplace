@@ -1,0 +1,20 @@
+# Cấu hình Nginx tạm thời (HTTP cổng 80) chỉ dùng lần đầu để Certbot xác thực
+# ACME HTTP-01 trước khi có chứng chỉ TLS trong /etc/letsencrypt/live/${APP_DOMAIN}.
+
+server {
+    listen 80;
+    server_name ${APP_DOMAIN} ${AUTH_DOMAIN};
+
+    server_tokens off;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+        try_files $uri =404;
+    }
+
+    location / {
+        default_type "text/plain";
+        return 200 "DLM ACME bootstrap ready\n";
+    }
+}

@@ -67,6 +67,10 @@ ensure_role \
     transaction_auditor \
     "Transaction and refund auditor"
 
+ensure_role \
+    partner_api \
+    "B2B Partner API client"
+
 echo "[3/4] Configuring default customer role..."
 
 DEFAULT_ROLE="default-roles-${REALM}"

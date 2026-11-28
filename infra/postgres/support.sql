@@ -13,8 +13,14 @@ CREATE TABLE IF NOT EXISTS support_tickets (
     "HandledBy" varchar(64) NULL,
     "Version" uuid NOT NULL,
     "CreatedAtUtc" timestamptz NOT NULL,
-    "UpdatedAtUtc" timestamptz NOT NULL
+    "UpdatedAtUtc" timestamptz NOT NULL,
+    "ResolutionOutcome" varchar(32) NULL,
+    "RejectionReason" varchar(500) NULL
 );
+
+ALTER TABLE support_tickets ALTER COLUMN "OrderId" DROP NOT NULL;
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS "ResolutionOutcome" varchar(32) NULL;
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS "RejectionReason" varchar(500) NULL;
 
 CREATE TABLE IF NOT EXISTS support_messages (
     "Id" uuid PRIMARY KEY,

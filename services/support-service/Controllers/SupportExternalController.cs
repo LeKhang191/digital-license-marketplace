@@ -9,7 +9,7 @@ using SupportService.Infrastructure.Persistence;
 namespace SupportService.Controllers;
 
 [ApiController]
-[Authorize(Roles = "license_coordinator,transaction_auditor")]
+[Authorize(Roles = "license_coordinator,transaction_auditor,catalog_manager")]
 [Route("api/support/tickets/{id:guid}")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class SupportExternalController(SupportDbContext db, JiraClient jira) : ControllerBase

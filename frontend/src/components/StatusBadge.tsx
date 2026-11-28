@@ -1,19 +1,21 @@
 import type { OrderStatus } from "../api/types";
+import { useLanguage } from "../i18n/LanguageContext";
 
-const STYLE: Record<OrderStatus, { label: string; color: string }> = {
-  PENDING: { label: "Chờ thanh toán", color: "var(--color-warning)" },
-  PAID: { label: "Đã thanh toán, đang cấp Key", color: "var(--color-info)" },
-  COMPLETED: { label: "Hoàn tất", color: "var(--color-success)" },
-  REFUNDING: { label: "Đang hoàn tiền", color: "var(--color-warning)" },
-  REFUNDED: { label: "Đã hoàn tiền", color: "var(--color-muted)" },
-  CANCELED: { label: "Đã hủy", color: "var(--color-danger)" },
+const STYLE: Record<OrderStatus, { vi: string; en: string; color: string }> = {
+  PENDING: { vi: "Chờ thanh toán", en: "Pending Payment", color: "var(--color-warning)" },
+  PAID: { vi: "Đã thanh toán, đang cấp Key", en: "Paid · Delivering Key", color: "var(--color-info)" },
+  COMPLETED: { vi: "Hoàn tất", en: "Completed", color: "var(--color-success)" },
+  REFUNDING: { vi: "Đang hoàn tiền", en: "Refunding", color: "var(--color-warning)" },
+  REFUNDED: { vi: "Đã hoàn tiền", en: "Refunded", color: "var(--color-muted)" },
+  CANCELED: { vi: "Đã hủy", en: "Canceled", color: "var(--color-danger)" },
 };
 
 export function StatusBadge({ status }: { status: OrderStatus }) {
+  const { lang } = useLanguage();
   const s = STYLE[status];
   return (
     <span className="badge" style={{ background: s.color }}>
-      {s.label}
+      {lang === "en" ? s.en : s.vi}
     </span>
   );
 }

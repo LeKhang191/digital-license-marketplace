@@ -25,3 +25,11 @@ public sealed record OrderCompletedEvent(
     string? CustomerEmail,
     decimal Amount,
     bool CustomerEmailVerified);
+
+public sealed record OrderRefundRejectedEvent(
+    Guid OrderId,
+    string KeycloakUserId,
+    string? CustomerEmail,
+    decimal Amount,
+    bool CustomerEmailVerified,
+    string Reason);

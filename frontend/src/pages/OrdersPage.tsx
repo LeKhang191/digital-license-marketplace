@@ -8,8 +8,10 @@ import { useAuth } from "../auth/AuthProvider";
 import { ReceiptDialog, buildOrderReceipt, type ReceiptData } from "../components/ReceiptDialog";
 import { StatusBadge } from "../components/StatusBadge";
 import { vnd } from "../components/format";
+import { useLanguage } from "../i18n/LanguageContext";
 
 export function OrdersPage() {
+  const { t } = useLanguage();
   const {
     ready,
     authenticated,
@@ -125,11 +127,11 @@ export function OrdersPage() {
     <div className="container">
       <div className="product-back">
         <Link to="/" className="btn btn-secondary">
-          ← Quay về cửa hàng
+          {t("← Quay về cửa hàng", "← Back to Store")}
         </Link>
       </div>
 
-      <h1>Đơn hàng của tôi</h1>
+      <h1>{t("Đơn hàng của tôi", "My Orders")}</h1>
 
       {error && (
         <div className="alert">{error}</div>
@@ -199,6 +201,12 @@ export function OrdersPage() {
                 >
                   Xem chứng từ
                 </button>
+                <Link
+                  className="btn btn-secondary"
+                  to={`/support?orderId=${encodeURIComponent(o.id)}`}
+                >
+                  Hỗ trợ / Hoàn tiền
+                </Link>
               </div>
             )}
 
@@ -208,14 +216,21 @@ export function OrdersPage() {
                   Đã thanh toán. Đơn hàng đang được xử lý.
                   Vui lòng không thanh toán lại.
                 </p>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ marginTop: 8 }}
-                  onClick={() => setReceipt(buildOrderReceipt(o, productName))}
-                >
-                  Xem chứng từ
-                </button>
+                <div className="supplier-actions" style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setReceipt(buildOrderReceipt(o, productName))}
+                  >
+                    Xem chứng từ
+                  </button>
+                  <Link
+                    className="btn btn-secondary"
+                    to={`/support?category=KEY_NOT_RECEIVED&orderId=${encodeURIComponent(o.id)}`}
+                  >
+                    Gửi phiếu hỗ trợ
+                  </Link>
+                </div>
               </div>
             )}
 

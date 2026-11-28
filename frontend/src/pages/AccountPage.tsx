@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
+  createWalletTopUp,
   getMyWallet,
   listWalletTransactions,
   type WalletBalance,
@@ -8,24 +10,33 @@ import {
 } from "../api/wallet";
 import { useAuth } from "../auth/AuthProvider";
 import { keycloak } from "../auth/keycloak";
+import { RefreshButton } from "../components/RefreshButton";
 import { vnd } from "../components/format";
 import { config } from "../config";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const TX_LABEL: Record<string, string> = {
-  TOPUP: "Nạp tiền vào ví",
+  TOPUP: "Nạp tiền vào ví (VNPay)",
   DEPOSIT: "Nạp tiền vào ví",
   PURCHASE: "Thanh toán đơn hàng",
   DEBIT: "Thanh toán đơn hàng",
   REFUND: "Hoàn tiền đơn hàng",
 };
 
+const TOPUP_PRESETS = [20000, 50000, 100000, 200000, 500000];
+
 export function AccountPage() {
   const { ready, authenticated, isCustomer, username, login } = useAuth();
+  const { t } = useLanguage();
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
+
+  const [topUpAmount, setTopUpAmount] = useState("100000");
+  const [topUpBusy, setTopUpBusy] = useState(false);
+  const [topUpError, setTopUpError] = useState("");
 
   useEffect(() => {
     if (!ready || !authenticated || !isCustomer) {
@@ -52,6 +63,35 @@ export function AccountPage() {
       cancelled = true;
     };
   }, [ready, authenticated, isCustomer, version]);
+
+  async function handleTopUp(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (topUpBusy || !isCustomer) return;
+    setTopUpError("");
+
+    const parsedAmount = Number(topUpAmount);
+    if (
+      !Number.isInteger(parsedAmount) ||
+      parsedAmount < 10000 ||
+      parsedAmount > 50000000
+    ) {
+      setTopUpError("Vui lòng nhập số tiền nguyên từ 10.000đ đến 50.000.000đ.");
+      return;
+    }
+
+    setTopUpBusy(true);
+    try {
+      const session = await createWalletTopUp(parsedAmount);
+      window.location.href = session.paymentUrl;
+    } catch (err) {
+      setTopUpError(
+        err instanceof Error
+          ? err.message
+          : "Không thể tạo phiên nạp tiền VNPay.",
+      );
+      setTopUpBusy(false);
+    }
+  }
 
   if (!ready) {
     return (
@@ -85,26 +125,22 @@ export function AccountPage() {
     <div className="container">
       <div className="product-back">
         <Link to="/" className="btn btn-secondary">
-          ← Quay về cửa hàng
+          {t("← Quay về cửa hàng", "← Back to Store")}
         </Link>
       </div>
 
-      <h1>Ví &amp; Cài đặt tài khoản</h1>
+      <h1>{t("Ví & Cài đặt tài khoản", "Wallet & Account Settings")}</h1>
 
       <div className="checkout-layout">
         <div className="checkout-items">
           {isCustomer && (
             <section className="card">
               <div className="supplier-heading">
-                <h2>Ví DLM (Marketplace Balance)</h2>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={loading}
+                <h2>{t("Ví DLM (Marketplace Balance)", "DLM Wallet (Marketplace Balance)")}</h2>
+                <RefreshButton
+                  loading={loading}
                   onClick={() => setVersion((v) => v + 1)}
-                >
-                  Làm mới
-                </button>
+                />
               </div>
 
               {error && (
@@ -119,11 +155,73 @@ export function AccountPage() {
                   {loading ? "Đang tải..." : wallet ? vnd(wallet.balance) : "—"}
                 </strong>
                 <p className="muted">
-                  Dùng để thanh toán nhanh đơn hàng hoặc nhận tiền hoàn tự động khi thiếu key.
+                  Dùng để thanh toán nhanh đơn hàng hoặc nhận tiền hoàn tự động khi được duyệt hoàn tiền / thiếu key.
                 </p>
               </div>
 
-              <h3 style={{ marginTop: 20 }}>Lịch sử giao dịch ví</h3>
+              <form className="wallet-topup-box" onSubmit={handleTopUp}>
+                <h3>Nạp tiền vào Ví DLM qua VNPay</h3>
+                <p className="muted">
+                  Chọn nhanh mệnh giá hoặc nhập số tiền cần nạp (10.000đ – 50.000.000đ). Số dư được cộng tự động sau khi VNPay xác nhận.
+                </p>
+
+                <div className="wallet-presets">
+                  {TOPUP_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={
+                        Number(topUpAmount) === preset
+                          ? "btn"
+                          : "btn btn-secondary"
+                      }
+                      disabled={topUpBusy}
+                      onClick={() => {
+                        setTopUpAmount(String(preset));
+                        setTopUpError("");
+                      }}
+                    >
+                      {vnd(preset)}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="row" style={{ marginTop: 12 }}>
+                  <input
+                    type="number"
+                    min={10000}
+                    max={50000000}
+                    step={1000}
+                    aria-label="Số tiền nạp (VND)"
+                    value={topUpAmount}
+                    disabled={topUpBusy}
+                    onChange={(e) => setTopUpAmount(e.target.value)}
+                    style={{ flex: 1, minWidth: 160 }}
+                  />
+                  <button
+                    type="submit"
+                    className="btn"
+                    disabled={topUpBusy}
+                  >
+                    {topUpBusy ? "Đang chuyển sang VNPay..." : "Nạp tiền qua VNPay"}
+                  </button>
+                </div>
+
+                {topUpError && (
+                  <div className="alert" role="alert" style={{ marginTop: 10 }}>
+                    {topUpError}
+                  </div>
+                )}
+
+                <p className="muted" style={{ marginTop: 8, fontSize: ".82rem" }}>
+                  Gặp sự cố khi nạp ví?{" "}
+                  <Link to="/support?category=WALLET_TOPUP_ISSUE">
+                    Gửi yêu cầu hỗ trợ nạp ví →
+                  </Link>
+                </p>
+              </form>
+
+              <h3 style={{ marginTop: 22 }}>Lịch sử giao dịch ví</h3>
               {loading ? (
                 <p className="muted">Đang tải lịch sử...</p>
               ) : txs.length === 0 ? (

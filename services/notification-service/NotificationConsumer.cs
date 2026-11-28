@@ -158,6 +158,7 @@ public sealed class NotificationConsumer(
         decimal amount;
         bool verified;
         string type;
+        string? detail = null;
 
         switch (route)
         {
@@ -190,6 +191,25 @@ public sealed class NotificationConsumer(
                 amount = evt.Amount;
                 verified = evt.CustomerEmailVerified;
                 type = "REFUNDED";
+                break;
+            }
+
+            case EventRoutes.RefundRejected:
+            {
+                var evt =
+                    JsonSerializer.Deserialize<OrderRefundRejectedEvent>(
+                        body, Json)
+                    ?? throw new InvalidDataException();
+
+                orderId = evt.OrderId;
+                customerId = evt.KeycloakUserId;
+                email = evt.CustomerEmail;
+                amount = evt.Amount;
+                verified = evt.CustomerEmailVerified;
+                type = "REFUND_REJECTED";
+                detail = string.IsNullOrWhiteSpace(evt.Reason)
+                    ? null
+                    : evt.Reason.Trim()[..Math.Min(evt.Reason.Trim().Length, 500)];
                 break;
             }
 
@@ -247,13 +267,13 @@ public sealed class NotificationConsumer(
                     "Id", "OrderId", "CustomerId",
                     "RecipientEmail", "Type", "Amount",
                     "Status", "CreatedAtUtc",
-                    "NextRetryAtUtc", "LastError"
+                    "NextRetryAtUtc", "LastError", "Detail"
                 )
                 VALUES (
                     {id}, {orderId}, {customerId},
                     {recipient}, {type}, {amount},
                     {status}, {now}, {now},
-                    NULLIF({reason}, '')
+                    NULLIF({reason}, ''), {detail}
                 )
                 ON CONFLICT ("OrderId", "Type")
                 DO NOTHING
@@ -311,7 +331,8 @@ public sealed class NotificationConsumer(
         foreach (var route in new[]
         {
             EventRoutes.OrderCompleted,
-            EventRoutes.OrderRefunded
+            EventRoutes.OrderRefunded,
+            EventRoutes.RefundRejected
         })
         {
             await channel.QueueBindAsync(

@@ -66,6 +66,62 @@ namespace PaymentService.Infrastructure.Persistence.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("PaymentService.Domain.Entities.PartnerWalletTopUp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PartnerId")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("WalletTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WalletTransactionId");
+
+                    b.HasIndex("PartnerId", "CreatedAtUtc");
+
+                    b.HasIndex("PartnerId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("partner_wallet_topups", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_partner_wallet_topups_amount", "\"Amount\" > 0");
+
+                            t.HasCheckConstraint("CK_partner_wallet_topups_balance", "\"BalanceAfter\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("PaymentService.Domain.Entities.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -234,6 +290,67 @@ namespace PaymentService.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PaymentService.Domain.Entities.WalletTopUp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentRef")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("VnpPayDate")
+                        .HasMaxLength(14)
+                        .HasColumnType("character varying(14)");
+
+                    b.Property<string>("VnpTransactionNo")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentRef")
+                        .IsUnique();
+
+                    b.HasIndex("VnpTransactionNo")
+                        .IsUnique()
+                        .HasFilter("\"VnpTransactionNo\" IS NOT NULL");
+
+                    b.HasIndex("CustomerId", "CreatedAtUtc");
+
+                    b.ToTable("wallet_topups", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_wallet_topups_amount", "\"Amount\" > 0");
+
+                            t.HasCheckConstraint("CK_wallet_topups_status", "\"Status\" IN ('PENDING', 'SUCCEEDED', 'FAILED')");
+                        });
+                });
+
             modelBuilder.Entity("PaymentService.Domain.Entities.WalletTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -275,8 +392,17 @@ namespace PaymentService.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_wallet_transactions_balance", "\"BalanceAfter\" >= 0");
 
-                            t.HasCheckConstraint("CK_wallet_transactions_type", "\"Type\" IN ('REFUND', 'PURCHASE')");
+                            t.HasCheckConstraint("CK_wallet_transactions_type", "\"Type\" IN ('REFUND', 'PURCHASE', 'TOPUP')");
                         });
+                });
+
+            modelBuilder.Entity("PaymentService.Domain.Entities.PartnerWalletTopUp", b =>
+                {
+                    b.HasOne("PaymentService.Domain.Entities.WalletTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("WalletTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PaymentService.Domain.Entities.Refund", b =>

@@ -4,6 +4,8 @@ import { listMyLicenses, revealMyLicense } from "../api/licenses";
 import { getProduct } from "../api/products";
 import type { CustomerLicense } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { RefreshButton } from "../components/RefreshButton";
+import { useLanguage } from "../i18n/LanguageContext";
 
 function LicenseCard({
   item,
@@ -13,10 +15,15 @@ function LicenseCard({
   name: string;
 }) {
   const [key, setKey] = useState<string | null>(null);
+  const [revealedAt, setRevealedAt] = useState<string | null>(
+    item.revealedAtUtc ?? null,
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const confirmDialog = useRef<HTMLDialogElement>(null);
+
+  const isRevealed = Boolean(revealedAt || item.isRevealed || key !== null);
 
   useEffect(() => {
     const d = confirmDialog.current;
@@ -34,6 +41,7 @@ function LicenseCard({
     try {
       const result = await revealMyLicense(item.id);
       setKey(result.licenseKey);
+      setRevealedAt(result.revealedAtUtc ?? new Date().toISOString());
     } catch (e) {
       setMessage(
         e instanceof Error
@@ -68,10 +76,27 @@ function LicenseCard({
 
   return (
     <div className="card">
-      <h2>{name}</h2>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <h2 style={{ margin: 0 }}>{name}</h2>
+        <span
+          className={
+            isRevealed
+              ? "license-status assigned"
+              : "license-status available"
+          }
+        >
+          {isRevealed ? "Đã xem key" : "Chưa mở key · Có thể yêu cầu hoàn tiền"}
+        </span>
+      </div>
 
-      <p className="muted">
-        Đơn hàng: {item.orderId.slice(0, 8)}
+      <p className="muted" style={{ marginTop: 8 }}>
+        Đơn hàng: <code>{item.orderId.slice(0, 8)}</code>
+        {revealedAt && (
+          <>
+            {" "}· Xem key lúc:{" "}
+            {new Date(revealedAt).toLocaleString("vi-VN")}
+          </>
+        )}
       </p>
 
       <p className="muted">
@@ -101,6 +126,22 @@ function LicenseCard({
         >
           Sao chép
         </button>
+
+        {isRevealed ? (
+          <Link
+            className="btn btn-secondary"
+            to={`/support?category=INVALID_KEY&orderId=${encodeURIComponent(item.orderId)}&licenseId=${encodeURIComponent(item.id)}`}
+          >
+            Báo key lỗi / Hoàn tiền
+          </Link>
+        ) : (
+          <Link
+            className="btn btn-secondary"
+            to={`/support?category=REFUND_REQUEST&orderId=${encodeURIComponent(item.orderId)}`}
+          >
+            Yêu cầu hoàn tiền (chưa mở key)
+          </Link>
+        )}
       </div>
 
       {message && <p role="status">{message}</p>}
@@ -159,6 +200,7 @@ function LicenseCard({
 
 export function MyLicensesPage() {
   const { username } = useAuth();
+  const { t } = useLanguage();
   const [params] = useSearchParams();
   const orderId = params.get("orderId") || undefined;
 
@@ -226,57 +268,54 @@ export function MyLicensesPage() {
 
   return (
     <div className="container">
-      <h1>License của tôi</h1>
+      <h1>{t("License của tôi", "My Licenses")}</h1>
 
-      <div className="row">
+      <div className="row" style={{ alignItems: "center" }}>
         <Link
           to="/orders"
           className="btn btn-secondary"
         >
-          Đơn hàng của tôi
+          {t("Đơn hàng của tôi", "My Orders")}
         </Link>
 
-        <button
-          className="btn btn-secondary"
+        <RefreshButton
+          loading={!items && !error}
           onClick={() => {
             setItems(null);
             setVersion(v => v + 1);
           }}
-        >
-          Làm mới
-        </button>
+        />
 
         {orderId && (
           <Link to="/my-licenses">
-            Xem tất cả License
+            {t("Xem tất cả License", "View all Licenses")}
           </Link>
         )}
       </div>
 
       {error && (
         <p className="alert">
-          {error} — Vui lòng thử lại.
+          {error} — {t("Vui lòng thử lại.", "Please try again.")}
         </p>
       )}
 
       {!items && !error && (
-        <p>Đang tải License...</p>
+        <p>{t("Đang tải License...", "Loading licenses...")}</p>
       )}
 
       {items?.length === 0 && (
         <p>
-          Chưa có License sẵn sàng.
-          Vui lòng kiểm tra trạng thái đơn hàng.
+          {t(
+            "Chưa có License sẵn sàng. Vui lòng kiểm tra trạng thái đơn hàng.",
+            "No licenses ready yet. Please check your order status.",
+          )}
         </p>
       )}
 
       {items && (
-        <>
-          <p>Tổng License: {items.length}</p>
-          <p className="muted" style={{ marginBottom: 14 }}>
-            Chính sách hoàn tiền: Hệ thống tự động hoàn tiền nếu đơn hết key khi cấp phát. Với key đã giao, vui lòng mở yêu cầu hỗ trợ kèm mã đơn nếu gặp lỗi kích hoạt để được đổi key hoặc hoàn tiền theo quy định.
-          </p>
-        </>
+        <p style={{ marginBottom: 14 }}>
+          {t("Tổng License:", "Total Licenses:")} {items.length}
+        </p>
       )}
 
       <div

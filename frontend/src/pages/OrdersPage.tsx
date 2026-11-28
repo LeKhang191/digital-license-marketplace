@@ -8,8 +8,10 @@ import { useAuth } from "../auth/AuthProvider";
 import { ReceiptDialog, buildOrderReceipt, type ReceiptData } from "../components/ReceiptDialog";
 import { StatusBadge } from "../components/StatusBadge";
 import { vnd } from "../components/format";
+import { useLanguage } from "../i18n/LanguageContext";
 
 export function OrdersPage() {
+  const { t } = useLanguage();
   const {
     ready,
     authenticated,
@@ -125,11 +127,11 @@ export function OrdersPage() {
     <div className="container">
       <div className="product-back">
         <Link to="/" className="btn btn-secondary">
-          ← Quay về cửa hàng
+          {t("← Quay về cửa hàng", "← Back to Store")}
         </Link>
       </div>
 
-      <h1>Đơn hàng của tôi</h1>
+      <h1>{t("Đơn hàng của tôi", "My Orders")}</h1>
 
       {error && (
         <div className="alert">{error}</div>

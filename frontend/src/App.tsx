@@ -4,6 +4,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { CartProvider } from "./cart/CartContext";
 import { Navbar } from "./components/Navbar";
+import { LanguageSwitcher } from "./components/LanguageSwitcher";
 
 import { RoleGuard } from "./auth/RoleGuard";
 import { Roles } from "./auth/roles";
@@ -147,6 +148,7 @@ export default function App() {
           element={<NotFoundPage />}
         />
       </Routes>
+      <LanguageSwitcher />
     </CartProvider>
   );
 }

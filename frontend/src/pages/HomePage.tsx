@@ -3,9 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { listProducts } from "../api/products";
 import type { Product } from "../api/types";
 import { ProductCard } from "../components/ProductCard";
+import { RefreshButton } from "../components/RefreshButton";
+import { useLanguage } from "../i18n/LanguageContext";
 import { filterProducts, pageNumbers, readPrice, PAGE_SIZE, SORT_OPTIONS, type StoreSort } from "./storefrontFilters";
 
 export function HomePage() {
+  const { t } = useLanguage();
   const [params, setParams] = useSearchParams();
   const search = params.get("q") ?? "";
   const category = params.get("category") ?? "";
@@ -82,25 +85,25 @@ export function HomePage() {
     setPriceError(""); update({ min: minDraft, max: maxDraft });
   };
   return <main className="storefront">
-    {home && <section className="featured-section"><h2 className="section-heading">Khám phá sản phẩm</h2><div className="featured-rail">{products ? products.slice(0,7).map(p => <ProductCard key={p.id} product={p} featured/>) : loading ? Array.from({length:7}, (_,i) => <div className="featured-placeholder skeleton" key={i}/>) : null}</div></section>}
+    {home && <section className="featured-section"><h2 className="section-heading">{t("Khám phá sản phẩm", "Featured Games")}</h2><div className="featured-rail">{products ? products.slice(0,7).map(p => <ProductCard key={p.id} product={p} featured/>) : loading ? Array.from({length:7}, (_,i) => <div className="featured-placeholder skeleton" key={i}/>) : null}</div></section>}
     <section className="catalog-section">
-      <div className="catalog-head"><h1 className="section-heading">{search ? `Kết quả: ${search}` : category === "Game" ? "Kho game" : category === "Software" ? "Tạp hóa" : "Tất cả sản phẩm"}</h1>
-        <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => setRetry(n => n+1)}>Làm mới</button>
+      <div className="catalog-head"><h1 className="section-heading">{search ? `${t("Kết quả", "Results")}: ${search}` : category === "Game" ? t("Kho game", "Game Library") : category === "Software" ? t("Tạp hóa", "Store & Software") : t("Tất cả sản phẩm", "All Products")}</h1>
+        <RefreshButton loading={loading} onClick={() => setRetry(n => n + 1)} />
       </div>
       <div className="store-filters">
-        <label>Thể loại game<select value={genre} onChange={e => update({genre:e.target.value})}><option value="">Tất cả</option>{genre && !genres.includes(genre) && <option value={genre}>{genre}</option>}{genres.map(g => <option key={g}>{g}</option>)}</select></label>
-        <label>Sắp xếp<select value={sort} onChange={e => update({sort:e.target.value === "default" ? "" : e.target.value})}><option value="default">Mặc định</option><option value="price-asc">Giá thấp đến cao</option><option value="price-desc">Giá cao đến thấp</option><option value="name-asc">Tên A–Z</option><option value="name-desc">Tên Z–A</option><option value="newest">Mới thêm</option></select></label>
-        <form className="price-filter" onSubmit={applyPrices}><label>Giá từ (₫)<input type="number" min={0} step={1} value={minDraft} onChange={e => setMinDraft(e.target.value)}/></label><label>Đến (₫)<input type="number" min={0} step={1} value={maxDraft} onChange={e => setMaxDraft(e.target.value)}/></label><button className="btn btn-secondary" type="submit">Áp dụng</button></form>
-        <button type="button" className="btn btn-secondary" onClick={() => {setMinDraft("");setMaxDraft("");setPriceError("");update({genre:"",min:"",max:"",sort:""});}}>Xóa bộ lọc</button>
+        <label>{t("Thể loại game", "Genre")}<select value={genre} onChange={e => update({genre:e.target.value})}><option value="">{t("Tất cả", "All")}</option>{genre && !genres.includes(genre) && <option value={genre}>{genre}</option>}{genres.map(g => <option key={g}>{g}</option>)}</select></label>
+        <label>{t("Sắp xếp", "Sort by")}<select value={sort} onChange={e => update({sort:e.target.value === "default" ? "" : e.target.value})}><option value="default">{t("Mặc định", "Default")}</option><option value="price-asc">{t("Giá thấp đến cao", "Price: Low to High")}</option><option value="price-desc">{t("Giá cao đến thấp", "Price: High to Low")}</option><option value="name-asc">{t("Tên A–Z", "Name A–Z")}</option><option value="name-desc">{t("Tên Z–A", "Name Z–A")}</option><option value="newest">{t("Mới thêm", "Newest")}</option></select></label>
+        <form className="price-filter" onSubmit={applyPrices}><label>{t("Giá từ (₫)", "Min price (₫)")}<input type="number" min={0} step={1} value={minDraft} onChange={e => setMinDraft(e.target.value)}/></label><label>{t("Đến (₫)", "Max price (₫)")}<input type="number" min={0} step={1} value={maxDraft} onChange={e => setMaxDraft(e.target.value)}/></label><button className="btn btn-secondary" type="submit">{t("Áp dụng", "Apply")}</button></form>
+        <button type="button" className="btn btn-secondary" onClick={() => {setMinDraft("");setMaxDraft("");setPriceError("");update({genre:"",min:"",max:"",sort:""});}}>{t("Xóa bộ lọc", "Clear filters")}</button>
       </div>
       {priceError && <p role="alert" className="alert">{priceError}</p>}
-      <p className="catalog-status muted" role="status">{loading ? "Đang tải danh sách…" : products ? `${filtered.length} sản phẩm` : "Không có dữ liệu"}</p>
-      {error && <div className="alert" role="alert">Không tải được danh sách: {error}{products && " (đang hiển thị dữ liệu lần tải trước)"} <button className="btn btn-secondary" onClick={() => setRetry(n => n+1)}>Thử lại</button></div>}
+      <p className="catalog-status muted" role="status">{loading ? t("Đang tải danh sách…", "Loading catalog…") : products ? `${filtered.length} ${t("sản phẩm", "products")}` : t("Không có dữ liệu", "No data")}</p>
+      {error && <div className="alert" role="alert">{t("Không tải được danh sách:", "Failed to load catalog:")} {error}{products && t(" (đang hiển thị dữ liệu lần tải trước)", " (showing previous data)")} <button className="btn btn-secondary" onClick={() => setRetry(n => n+1)}>{t("Thử lại", "Retry")}</button></div>}
       <div className={`catalog-grid${(!products && loading) || filtered.length > PAGE_SIZE ? " catalog-stable" : ""}`} aria-busy={loading}>
         {!products && loading ? Array.from({length:PAGE_SIZE}, (_,i) => <div className="skeleton" key={i}/>) : items.map(p => <ProductCard key={p.id} product={p}/>)}
-        {products && !items.length && <p className="muted empty-state">Không có sản phẩm phù hợp.</p>}
+        {products && !items.length && <p className="muted empty-state">{t("Không có sản phẩm phù hợp.", "No matching products found.")}</p>}
       </div>
-      {products && filtered.length > 0 && <nav className="pagination" aria-label="Phân trang sản phẩm"><button className="btn btn-secondary" disabled={page <= 1} onClick={() => go(page-1)}>Trước</button>{pageNumbers(page,lastPage).map(n => typeof n === "number" ? <button key={n} className={`btn btn-secondary${n === page ? " page-current" : ""}`} aria-current={n === page ? "page" : undefined} onClick={() => go(n)}>{n}</button> : <span key={n}>…</span>)}<button className="btn btn-secondary" disabled={page >= lastPage} onClick={() => go(page+1)}>Sau</button></nav>}
+      {products && filtered.length > 0 && <nav className="pagination" aria-label={t("Phân trang sản phẩm", "Product pagination")}><button className="btn btn-secondary" disabled={page <= 1} onClick={() => go(page-1)}>{t("Trước", "Prev")}</button>{pageNumbers(page,lastPage).map(n => typeof n === "number" ? <button key={n} className={`btn btn-secondary${n === page ? " page-current" : ""}`} aria-current={n === page ? "page" : undefined} onClick={() => go(n)}>{n}</button> : <span key={n}>…</span>)}<button className="btn btn-secondary" disabled={page >= lastPage} onClick={() => go(page+1)}>{t("Sau", "Next")}</button></nav>}
     </section>
   </main>;
 }

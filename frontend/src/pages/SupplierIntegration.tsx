@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Product } from "../api/types";
+import { RefreshButton } from "../components/RefreshButton";
 
 type Status = { provider: string; mode: string; credentialSource: string; purchaseEnabled: boolean; demoAutoImport?: boolean };
 type Mapping = { productId: string; supplierProductId: string | null; suggestedMockId?: string | null };
@@ -75,8 +76,10 @@ export function SupplierIntegration({ products, product, locked, onBusy, onMappi
     </>}
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {tab === "history" && <>
-    <h3>Lịch sử đơn mua mô phỏng của tôi</h3>
-    <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => refresh(v => v + 1)}>Làm mới lịch sử</button>
+    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+      <h3 style={{ margin: 0 }}>Lịch sử đơn mua mô phỏng của tôi</h3>
+      <RefreshButton title="Làm mới lịch sử" loading={busy} onClick={() => refresh(v => v + 1)} />
+    </div>
     <div style={{overflowX:"auto"}}><table className="admin-table"><thead><tr><th>Mã đơn / ngày</th><th>Sản phẩm</th><th>Số lượng</th><th>Chi phí ảo (EUR)</th><th>Trạng thái</th></tr></thead><tbody>{orders.map(o => <tr key={o.requestId}><td>{o.requestId}<br/>{new Date(o.createdAtUtc).toLocaleString("vi-VN")}</td><td>{products.find(p => p.id === o.productId)?.name ?? o.productId}<br/>{o.supplierProductId}</td><td>{o.quantity}</td><td>{o.totalCost.toFixed(2)}</td><td>{o.status === "MOCK_FULFILLED" ? (o.imported ? `Đã nhập ${o.imported} key` : "Hoàn thành (cách ly)") : o.status === "MOCK_PENDING" ? "Đang xử lý" : o.status === "MOCK_IMPORT_BLOCKED" ? "Nhập kho bị chặn" : "Hết hàng"}</td></tr>)}</tbody></table></div>
     {!orders.length && <p className="muted">Chưa có đơn mô phỏng.</p>}
     </>}

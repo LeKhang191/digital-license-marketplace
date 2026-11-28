@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { RefreshButton } from "../components/RefreshButton";
 import { vnd } from "../components/format";
 
 type Transaction = {
@@ -35,7 +36,10 @@ export function TransactionsPage() {
       <div className="card"><h2>Đã hoàn tiền</h2><strong>{data?.refunded ?? "—"}</strong></div>
     </div>
     <div className="card" style={{ marginTop: 24 }}>
-      <div className="row"><h2>Danh sách giao dịch</h2><button className="btn btn-secondary" disabled={loading} onClick={() => setRevision(n => n + 1)}>Làm mới</button></div>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <h2 style={{ margin: 0 }}>Danh sách giao dịch</h2>
+        <RefreshButton loading={loading} onClick={() => setRevision(n => n + 1)} />
+      </div>
       {error && <p className="alert" role="alert">{error}</p>}
       {loading && <p role="status">Đang tải...</p>}
       {data && <>

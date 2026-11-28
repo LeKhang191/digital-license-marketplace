@@ -10,8 +10,10 @@ import {
 } from "../api/wallet";
 import { useAuth } from "../auth/AuthProvider";
 import { keycloak } from "../auth/keycloak";
+import { RefreshButton } from "../components/RefreshButton";
 import { vnd } from "../components/format";
 import { config } from "../config";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const TX_LABEL: Record<string, string> = {
   TOPUP: "Nạp tiền vào ví (VNPay)",
@@ -25,6 +27,7 @@ const TOPUP_PRESETS = [20000, 50000, 100000, 200000, 500000];
 
 export function AccountPage() {
   const { ready, authenticated, isCustomer, username, login } = useAuth();
+  const { t } = useLanguage();
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,26 +125,22 @@ export function AccountPage() {
     <div className="container">
       <div className="product-back">
         <Link to="/" className="btn btn-secondary">
-          ← Quay về cửa hàng
+          {t("← Quay về cửa hàng", "← Back to Store")}
         </Link>
       </div>
 
-      <h1>Ví &amp; Cài đặt tài khoản</h1>
+      <h1>{t("Ví & Cài đặt tài khoản", "Wallet & Account Settings")}</h1>
 
       <div className="checkout-layout">
         <div className="checkout-items">
           {isCustomer && (
             <section className="card">
               <div className="supplier-heading">
-                <h2>Ví DLM (Marketplace Balance)</h2>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={loading}
+                <h2>{t("Ví DLM (Marketplace Balance)", "DLM Wallet (Marketplace Balance)")}</h2>
+                <RefreshButton
+                  loading={loading}
                   onClick={() => setVersion((v) => v + 1)}
-                >
-                  Làm mới
-                </button>
+                />
               </div>
 
               {error && (

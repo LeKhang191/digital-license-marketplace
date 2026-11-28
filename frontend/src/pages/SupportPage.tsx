@@ -28,7 +28,9 @@ import {
 } from "../api/support";
 import type { CustomerLicense, Order, Product } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { RefreshButton } from "../components/RefreshButton";
 import { vnd } from "../components/format";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const STATUS_META: Record<
   SupportTicketSummary["status"],
@@ -80,6 +82,7 @@ export function SupportPage() {
     isStaff,
     login,
   } = useAuth();
+  const { t } = useLanguage();
   const [params] = useSearchParams();
 
   const [categories, setCategories] = useState<SupportCategory[]>([]);
@@ -590,23 +593,25 @@ export function SupportPage() {
         <div>
           <h1 style={{ marginBottom: 4 }}>
             {isStaff
-              ? `Hộp thư Hỗ trợ — ${staffRoleTitle}`
-              : "Trung tâm Hỗ trợ & Hoàn tiền"}
+              ? `${t("Hộp thư Hỗ trợ", "Support Inbox")} — ${staffRoleTitle}`
+              : t("Trung tâm Hỗ trợ & Hoàn tiền", "Support & Refund Center")}
           </h1>
           <p className="muted" style={{ marginTop: 0 }}>
             {isStaff
-              ? "Hệ thống tự động phân luồng đúng phiếu hỗ trợ thuộc phạm vi phụ trách của bạn."
-              : "Chọn chủ đề phù hợp — phiếu sẽ được gửi tự động tới đúng bộ phận phụ trách xử lý."}
+              ? t(
+                  "Hệ thống tự động phân luồng đúng phiếu hỗ trợ thuộc phạm vi phụ trách của bạn.",
+                  "Tickets matching your assigned role are routed here automatically.",
+                )
+              : t(
+                  "Chọn chủ đề phù hợp — phiếu sẽ được gửi tự động tới đúng bộ phận phụ trách xử lý.",
+                  "Choose a topic — your ticket will be routed automatically to the right team.",
+                )}
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={loadingList}
+        <RefreshButton
+          loading={loadingList}
           onClick={() => setRefreshTick((v) => v + 1)}
-        >
-          Làm mới
-        </button>
+        />
       </div>
 
       {isCustomer && (

@@ -1,6 +1,7 @@
 import { inventoryRows, stockLevel, stockValuation } from "./inventoryMetrics";
 import { InventoryReplacementHistory } from "./InventoryReplacementHistory";
 import { vnd } from "../components/format";
+import { RefreshButton } from "../components/RefreshButton";
 import { ReceiptDialog, type ReceiptData } from "../components/ReceiptDialog";
 
 import { useEffect, useRef, useState } from "react";
@@ -743,7 +744,13 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
               {!canFulfillQty && <p role="status">Không đủ tồn kho cho số lượng đã chọn.</p>}
             </div>;
           })()}
-          <button type="button" className="btn btn-secondary kinguin-refresh" disabled={supplierLoading || mockBusy || !!mockRequest || integrationBusy} onClick={() => setSupplierRefresh(v => v + 1)}>Làm mới báo giá</button>
+          <RefreshButton
+            className="kinguin-refresh"
+            title="Làm mới báo giá"
+            loading={supplierLoading}
+            disabled={mockBusy || !!mockRequest || integrationBusy}
+            onClick={() => setSupplierRefresh(v => v + 1)}
+          />
                 {(supplierQuote?.mode === "Mock" || mockRequest) && (
                   <div className="kinguin-order" aria-live="polite">
                     <p className="muted">{supplierQuote?.demoAutoImport ? "Nhập kho demo tự động · Không dùng tiền thật · Key không thể kích hoạt." : "Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật."}</p>
@@ -861,41 +868,16 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
 
           <span className="spacer" />
 
-          <button
-            type="button"
-            className="refresh-btn"
+          <RefreshButton
             title="Làm mới dữ liệu"
-            aria-label="Làm mới dữ liệu"
-            aria-busy={loading || loadingKeys}
-            disabled={busy || loading || loadingKeys}
+            loading={loading || loadingKeys}
+            disabled={busy}
             onClick={() => {
               setError("");
               setSuccess("");
               setRefreshVersion((v) => v + 1);
             }}
-          >
-            <svg
-              className={
-                loading || loadingKeys
-                  ? "refresh-icon spinning"
-                  : "refresh-icon"
-              }
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M20 7v5h-5" />
-              <path d="M4 17v-5h5" />
-              <path d="M6.1 6.1A8.3 8.3 0 0 1 20 12" />
-              <path d="M4 12a8.3 8.3 0 0 0 13.9 5.9" />
-            </svg>
-          </button>
+          />
         </div>
 
         <label>Tìm trong kho <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên hoặc mã sản phẩm" /></label>

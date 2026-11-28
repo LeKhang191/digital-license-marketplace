@@ -80,6 +80,7 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
     }
 
     public sealed record StockSummaryRow(Guid ProductId, int Available, int Allocated);
+    public sealed record StockAvailabilityRow(Guid ProductId, int Available);
 
     public async Task<List<StockSummaryRow>> GetStockSummaryAsync(CancellationToken ct)
     {
@@ -96,6 +97,33 @@ public sealed class VaultStore(NpgsqlDataSource source, byte[] masterKey)
         while (await reader.ReadAsync(ct))
             rows.Add(new(reader.GetGuid(0), reader.GetInt32(1), reader.GetInt32(2)));
         return rows;
+    }
+
+    public async Task<List<StockAvailabilityRow>> GetAvailabilityAsync(CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("""
+            SELECT product_id, COUNT(*)::int AS available
+            FROM vault_keys
+            WHERE order_id IS NULL
+            GROUP BY product_id
+            ORDER BY product_id
+            """);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new List<StockAvailabilityRow>();
+        while (await reader.ReadAsync(ct))
+            rows.Add(new(reader.GetGuid(0), reader.GetInt32(1)));
+        return rows;
+    }
+
+    public async Task<int> GetProductAvailabilityAsync(Guid productId, CancellationToken ct)
+    {
+        await using var cmd = source.CreateCommand("""
+            SELECT COUNT(*)::int
+            FROM vault_keys
+            WHERE product_id = @product AND order_id IS NULL
+            """);
+        cmd.Parameters.AddWithValue("product", productId);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
     }
 
     public async Task<(bool Allocated, Guid? MissingProductId)> AllocateAsync(OrderPaidEvent evt, CancellationToken ct)

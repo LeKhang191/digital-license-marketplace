@@ -111,12 +111,65 @@ body::before { content:""; position:fixed; z-index:-1; inset:-25%; pointer-event
 .order-key-row { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; padding: .75rem; border-radius: 8px; background: rgba(0,0,0,.2); }
 .order-key-row code { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: all; }
 
-/* Steam metadata — existing glass storefront */
+/* Steam metadata & redesigned game detail page */
 .product-art .steam-art {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;}
-.detail-layout>.product-art .steam-art {object-fit:contain;background:#111;}
+.product-stock {display:inline-flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;font-weight:600;letter-spacing:.01em;}
+.product-stock.in-stock {color:#86efac;}
+.product-stock.out-of-stock {color:#fda4af;}
+.stock-dot {width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;}
+
+.game-page {display:flex;flex-direction:column;gap:20px;animation:arrive .3s ease both;}
+.game-hero {position:relative;overflow:hidden;padding:24px;}
+.game-hero-backdrop {position:absolute;inset:-24px;background-size:cover;background-position:center;filter:blur(28px) saturate(1.1);opacity:.2;pointer-events:none;}
+.game-hero-backdrop::after {content:"";position:absolute;inset:0;background:linear-gradient(180deg,#16171a66,#16171aee 85%);}
+.game-hero-grid {position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(290px,360px);gap:24px;align-items:start;}
+.game-hero-main {display:flex;flex-direction:column;gap:16px;}
+.game-hero-media .product-art {aspect-ratio:16/9;min-height:220px;border-radius:12px;border:1px solid #ffffff16;background:#111;}
+.game-hero-media .steam-art {object-fit:cover;}
+.game-hero-header h1 {font-size:clamp(24px,3vw,34px);line-height:1.15;margin:0 0 10px;}
+.game-tags {display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.game-tag {font-size:12px;padding:4px 10px;border-radius:999px;background:#ffffff12;border:1px solid #ffffff16;color:#e5e7eb;}
+.game-summary {margin:0;max-width:68ch;color:#d4d6dc;line-height:1.65;}
+
+.purchase-dock {background:#151619d9;border:1px solid #ffffff18;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;}
+.purchase-price-row,.dock-qty-row,.dock-total-row {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.purchase-price {font-size:28px;line-height:1.1;color:var(--color-accent);}
+.dock-stock {display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;}
+.dock-stock.in-stock {background:#15803d26;border:1px solid #22c55e3d;color:#86efac;}
+.dock-stock.out-of-stock {background:#7f1d1d40;border:1px solid #fda4af40;color:#fecdd3;}
+.qty-stepper {display:flex;align-items:center;gap:6px;}
+.qty-stepper input {width:62px;text-align:center;padding:7px 8px;}
+.qty-btn {padding:6px 12px;line-height:1.2;}
+.dock-total-row {padding-top:10px;border-top:1px solid var(--color-border);font-size:15px;}
+.dock-buy-btn {width:100%;text-align:center;padding:12px 16px;font-size:15px;}
+.dock-notes {margin:4px 0 0;padding-left:18px;color:var(--color-muted);font-size:12px;display:flex;flex-direction:column;gap:6px;}
+
+.game-section {padding:22px;}
+.game-meta-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0;}
+.game-meta-grid>div {padding:12px 14px;border-radius:10px;background:#ffffff08;border:1px solid #ffffff0d;}
+.game-meta-grid dt {font-size:12px;color:var(--color-muted);margin-bottom:4px;}
+.game-meta-grid dd {margin:0;font-weight:600;font-size:14px;overflow-wrap:anywhere;}
+
+.game-trailer {display:block;width:100%;max-width:920px;margin:0 auto 18px;border-radius:10px;background:#000;}
 .steam-import {margin-bottom:20px;} .steam-import form {margin:16px 0;} .steam-import input {flex:1;min-width:0;} .steam-preview img {max-width:100%;border-radius:10px;}
-.steam-details {margin-top:24px;} .steam-details video {display:block;width:100%;max-width:850px;margin:20px auto;border-radius:10px;}
-.steam-gallery,.steam-requirements {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
-.steam-gallery img {display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;transition:transform .25s;} .steam-gallery img:hover {transform:scale(1.025);}
-.steam-requirements>div {padding:12px;background:#ffffff09;border-radius:10px;} .steam-requirements p {white-space:pre-line;overflow-wrap:anywhere;}
-@media(max-width:600px){.steam-requirements,.steam-gallery {grid-template-columns:1fr;}}
+.steam-gallery {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.gallery-thumb {border:1px solid #ffffff12;padding:0;background:#111;border-radius:8px;overflow:hidden;cursor:pointer;}
+.gallery-thumb img {display:block;width:100%;aspect-ratio:16/9;object-fit:cover;transition:transform .25s;}
+.gallery-thumb:hover img {transform:scale(1.03);}
+
+.req-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+.req-card {padding:16px 18px;border-radius:10px;background:#ffffff08;border:1px solid #ffffff12;}
+.req-card h3 {margin:0 0 12px;font-size:16px;padding-bottom:10px;border-bottom:1px solid #ffffff12;}
+.req-list {margin:0;display:flex;flex-direction:column;gap:10px;}
+.req-row {display:grid;grid-template-columns:130px minmax(0,1fr);gap:10px;font-size:13px;line-height:1.45;}
+.req-row dt {color:var(--color-muted);font-weight:500;}
+.req-row dd {margin:0;overflow-wrap:anywhere;}
+.req-notes {margin-top:12px;padding-top:10px;border-top:1px solid #ffffff0f;font-size:12px;}
+.req-notes p {margin:4px 0;}
+
+.lightbox-dialog {max-width:min(1080px,calc(100% - 32px));padding:12px;border:1px solid #ffffff30;border-radius:12px;background:#141518f2;position:relative;}
+.lightbox-dialog::backdrop {background:#000b;backdrop-filter:blur(6px);}
+.lightbox-dialog img {display:block;width:100%;max-height:82vh;object-fit:contain;border-radius:8px;}
+
+@media(max-width:900px){.game-hero-grid{grid-template-columns:1fr}.game-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.steam-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.game-hero{padding:16px}.game-meta-grid,.steam-gallery,.req-grid{grid-template-columns:1fr}.req-row{grid-template-columns:1fr;gap:2px}}

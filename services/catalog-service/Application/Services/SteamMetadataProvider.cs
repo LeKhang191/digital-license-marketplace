@@ -5,7 +5,12 @@ using Catalog.Api.Application.DTOs;
 
 namespace Catalog.Api.Application.Services;
 
-public sealed class SteamMetadataProvider(HttpClient http, IgdbMetadataProvider igdb, IConfiguration config, ILogger<SteamMetadataProvider> log)
+public sealed class SteamMetadataProvider(
+    HttpClient http,
+    IgdbMetadataProvider igdb,
+    RawgRequirementsProvider rawg,
+    IConfiguration config,
+    ILogger<SteamMetadataProvider> log)
 {
     public static bool TryAppId(string? input, out int id)
     {
@@ -22,16 +27,92 @@ public sealed class SteamMetadataProvider(HttpClient http, IgdbMetadataProvider 
     public async Task<SteamMetadata?> FetchAsync(int id, CancellationToken ct)
     {
         if (config["GameMetadata:Provider"]?.Equals("Igdb", StringComparison.OrdinalIgnoreCase) == true)
-            return await igdb.FetchAsync(id, ct);
+        {
+            var igdbMeta = await igdb.FetchAsync(id, ct);
+            return igdbMeta is null ? null : await EnrichRequirementsAsync(igdbMeta, ct);
+        }
+
         SteamMetadata? result;
         try { result = await FetchSteamAsync(id, ct); }
         catch (Exception ex) when (igdb.IsConfigured && !ct.IsCancellationRequested &&
             ex is HttpRequestException or JsonException or OperationCanceledException)
         {
             log.LogWarning("Steam request failed ({ErrorType}); trying IGDB", ex.GetType().Name);
-            return await igdb.FetchAsync(id, ct);
+            var fallback = await igdb.FetchAsync(id, ct);
+            return fallback is null ? null : await EnrichRequirementsAsync(fallback, ct);
         }
-        return result ?? (igdb.IsConfigured ? await igdb.FetchAsync(id, ct) : null);
+        if (result is not null) return await EnrichRequirementsAsync(result, ct);
+        if (!igdb.IsConfigured) return null;
+        var meta = await igdb.FetchAsync(id, ct);
+        return meta is null ? null : await EnrichRequirementsAsync(meta, ct);
+    }
+
+    public async Task<SteamMetadata> EnrichRequirementsAsync(SteamMetadata metadata, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(metadata.MinimumRequirements) ||
+            !string.IsNullOrWhiteSpace(metadata.RecommendedRequirements))
+            return metadata;
+
+        // 1. Try RAWG first when configured (not ISP-blocked in Vietnam)
+        if (rawg.IsConfigured)
+        {
+            using var rawgTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            rawgTimeout.CancelAfter(TimeSpan.FromSeconds(6));
+            var rawgReq = await rawg.FetchPcRequirementsAsync(metadata.Name, rawgTimeout.Token);
+            if (rawgReq is not null)
+            {
+                return metadata with
+                {
+                    MinimumRequirements = rawgReq.Value.Minimum,
+                    RecommendedRequirements = rawgReq.Value.Recommended
+                };
+            }
+        }
+
+        // 2. Fallback to Steam Store pc_requirements with a short timeout
+        if (metadata.AppId > 0)
+        {
+            var steamExtras = await TryFetchSteamExtrasAsync(metadata.AppId, ct);
+            if (steamExtras is not null)
+            {
+                return metadata with
+                {
+                    MinimumRequirements = string.IsNullOrWhiteSpace(metadata.MinimumRequirements)
+                        ? steamExtras.Value.Minimum : metadata.MinimumRequirements,
+                    RecommendedRequirements = string.IsNullOrWhiteSpace(metadata.RecommendedRequirements)
+                        ? steamExtras.Value.Recommended : metadata.RecommendedRequirements,
+                    TrailerUrl = metadata.TrailerUrl ?? steamExtras.Value.TrailerUrl
+                };
+            }
+        }
+
+        return metadata;
+    }
+
+    private async Task<(string Minimum, string Recommended, string? TrailerUrl)?> TryFetchSteamExtrasAsync(int id, CancellationToken ct)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(4));
+            using var response = await http.GetAsync($"api/appdetails?appids={id}&filters=pc_requirements,movies&l=english&cc=vn", timeout.Token);
+            if (!response.IsSuccessStatusCode) return null;
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+            var entry = Get(doc.RootElement, id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (Get(entry, "success").ValueKind != JsonValueKind.True) return null;
+            var data = Get(entry, "data");
+            var requirements = Get(data, "pc_requirements");
+            var min = Plain(Str(requirements, "minimum"), 8000);
+            var rec = Plain(Str(requirements, "recommended"), 8000);
+            var trailer = Array(Get(data, "movies")).Select(x => Media(Str(Get(x, "mp4"), "max"))).FirstOrDefault(x => x.Length > 0);
+            if (min.Length == 0 && rec.Length == 0 && trailer is null) return null;
+            return (min, rec, trailer);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            log.LogDebug("Steam requirements enrichment skipped for app {AppId} ({ErrorType})", id, ex.GetType().Name);
+            return null;
+        }
     }
 
     private async Task<SteamMetadata?> FetchSteamAsync(int id, CancellationToken ct)

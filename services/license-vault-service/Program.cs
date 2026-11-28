@@ -89,6 +89,12 @@ app.MapGet("/internal/orders/{id:guid}/keys", async Task<IResult> (Guid id, Http
     return keys.Count == 0 ? Results.NotFound() : Results.Ok(keys);
 }).RequireAuthorization("Library");
 
+app.MapGet("/api/vault/availability", async Task<IResult> (VaultStore vault, CancellationToken ct) =>
+    Results.Ok(await vault.GetAvailabilityAsync(ct)));
+
+app.MapGet("/api/vault/availability/{productId:guid}", async Task<IResult> (Guid productId, VaultStore vault, CancellationToken ct) =>
+    Results.Ok(new VaultStore.StockAvailabilityRow(productId, await vault.GetProductAvailabilityAsync(productId, ct))));
+
 app.MapGet("/api/vault/stock", async Task<IResult> (VaultStore vault, CancellationToken ct) =>
     Results.Ok(await vault.GetStockSummaryAsync(ct))).RequireAuthorization("AdminOnly");
 

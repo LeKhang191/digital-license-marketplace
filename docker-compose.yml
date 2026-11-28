@@ -56,6 +56,8 @@ services:
       GameMetadata__Provider: "${GAME_METADATA_PROVIDER:-Steam}"
       Igdb__ClientId: "${IGDB_CLIENT_ID:-}"
       Igdb__ClientSecret: "${IGDB_CLIENT_SECRET:-}"
+      Rawg__ApiKey: "${RAWG_API_KEY:-}"
+      Steam__StoreBaseUrl: "${STEAM_STORE_BASE_URL:-https://store.steampowered.com/}"
     depends_on:
       postgres:
         condition: service_healthy

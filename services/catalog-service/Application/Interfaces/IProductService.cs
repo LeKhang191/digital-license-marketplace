@@ -32,4 +32,8 @@ public interface IProductService
         Guid id,
         CancellationToken ct
     );
+
+    Task<int> RefreshMissingRequirementsAsync(
+        CancellationToken ct
+    );
 }

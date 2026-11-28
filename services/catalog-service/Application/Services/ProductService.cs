@@ -1,14 +1,18 @@
+using System.Text.Json;
 using Catalog.Api.Application.DTOs;
 using Catalog.Api.Application.Interfaces;
 using Catalog.Api.Domain.Entities;
 using Catalog.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 
 namespace Catalog.Api.Application.Services;
 
 public sealed class ProductService(
-    CatalogDbContext db
+    CatalogDbContext db,
+    SteamMetadataProvider steam,
+    IMemoryCache cache
 ) : IProductService
 {
     public async Task<PagedProducts> ListAsync(
@@ -60,13 +64,61 @@ public sealed class ProductService(
         CancellationToken ct)
     {
         var product = await db.Products
-            .AsNoTracking()
             .FirstOrDefaultAsync(
                 p => p.Id == id && p.IsActive, ct);
 
-        return product is null
-            ? null
-            : ProductResponse.From(product);
+        if (product is null)
+            return null;
+
+        await TryAutoEnrichRequirementsAsync(product, ct);
+
+        return ProductResponse.From(product);
+    }
+
+    public async Task<int> RefreshMissingRequirementsAsync(CancellationToken ct)
+    {
+        var candidates = await db.Products
+            .Where(p => p.IsActive && p.SteamMetadataJson != null)
+            .ToListAsync(ct);
+
+        var updated = 0;
+        foreach (var product in candidates)
+        {
+            cache.Remove($"req-miss:{product.Id}");
+            if (await TryAutoEnrichRequirementsAsync(product, ct))
+                updated++;
+        }
+
+        return updated;
+    }
+
+    private async Task<bool> TryAutoEnrichRequirementsAsync(Product product, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(product.SteamMetadataJson)) return false;
+        SteamMetadata? meta;
+        try { meta = JsonSerializer.Deserialize<SteamMetadata>(product.SteamMetadataJson); }
+        catch (JsonException) { return false; }
+
+        if (meta is null ||
+            !string.IsNullOrWhiteSpace(meta.MinimumRequirements) ||
+            !string.IsNullOrWhiteSpace(meta.RecommendedRequirements))
+            return false;
+
+        var missKey = $"req-miss:{product.Id}";
+        if (cache.TryGetValue(missKey, out _)) return false;
+
+        var enriched = await steam.EnrichRequirementsAsync(meta, ct);
+        if (string.IsNullOrWhiteSpace(enriched.MinimumRequirements) &&
+            string.IsNullOrWhiteSpace(enriched.RecommendedRequirements))
+        {
+            cache.Set(missKey, true, TimeSpan.FromMinutes(10));
+            return false;
+        }
+
+        product.SteamMetadataJson = JsonSerializer.Serialize(enriched);
+        product.UpdatedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<(ProductResponse?, bool)> CreateAsync(

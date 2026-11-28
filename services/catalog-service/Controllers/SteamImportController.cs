@@ -22,6 +22,13 @@ public sealed class SteamImportController(SteamMetadataProvider steam, IProductS
     [HttpPost]
     public Task<IActionResult> Create(ImportRequest request, CancellationToken ct) => Import(request.App, request.Price, ct);
 
+    [HttpPost("refresh-requirements")]
+    public async Task<IActionResult> RefreshRequirements(CancellationToken ct)
+    {
+        var updated = await products.RefreshMissingRequirementsAsync(ct);
+        return Ok(new { updated });
+    }
+
     private async Task<IActionResult> Import(string app, decimal? price, CancellationToken ct)
     {
         if (!SteamMetadataProvider.TryAppId(app, out var id)) return BadRequest(new { error = "Steam App ID or store URL is invalid." });

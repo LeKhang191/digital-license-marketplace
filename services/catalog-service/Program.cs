@@ -21,9 +21,19 @@ builder.Services.AddHttpClient<IgdbMetadataProvider>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(12);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient<RawgRequirementsProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(8);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+var steamBaseUrl = builder.Configuration["Steam:StoreBaseUrl"];
+if (!Uri.TryCreate(steamBaseUrl, UriKind.Absolute, out var parsedSteamUri) ||
+    (parsedSteamUri.Scheme != Uri.UriSchemeHttps && parsedSteamUri.Scheme != Uri.UriSchemeHttp))
+{
+    parsedSteamUri = new Uri("https://store.steampowered.com/");
+}
 builder.Services.AddHttpClient<SteamMetadataProvider>(client =>
 {
-    client.BaseAddress = new Uri("https://store.steampowered.com/");
+    client.BaseAddress = new Uri(parsedSteamUri.AbsoluteUri.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(15);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddKeycloakAuth(builder.Configuration, builder.Environment);

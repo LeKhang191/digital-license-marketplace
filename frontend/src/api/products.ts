@@ -11,5 +11,17 @@ export function listProducts(params: { search?: string; category?: string; page?
 
 export const getProduct = (id: string) => api<Product>(`/catalog/products/${id}`);
 
+export interface VaultAvailability {
+  productId: string;
+  available: number;
+}
+
+export const getVaultAvailability = () =>
+  api<VaultAvailability[]>("/vault/availability");
+
+export const getProductAvailability = (productId: string) =>
+  api<VaultAvailability>(`/vault/availability/${encodeURIComponent(productId)}`);
+
 export const previewSteam = (app: string) => api<import("./types").SteamMetadata>(`/catalog/steam-import/preview?${new URLSearchParams({app})}`, { auth: true });
 export const importSteam = (app: string, price: number) => api<Product>("/catalog/steam-import", { method: "POST", auth: true, body: JSON.stringify({app, price}) });
+export const refreshSteamRequirements = () => api<{ updated: number }>("/catalog/steam-import/refresh-requirements", { method: "POST", auth: true });

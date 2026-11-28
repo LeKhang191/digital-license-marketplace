@@ -15,6 +15,20 @@
       ]
     },
     {
+      "DownstreamPathTemplate": "/api/steam-import/refresh-requirements",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "catalog",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/catalog/steam-import/refresh-requirements",
+      "UpstreamHttpMethod": [
+        "POST"
+      ]
+    },
+    {
       "DownstreamPathTemplate": "/api/steam-import",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [

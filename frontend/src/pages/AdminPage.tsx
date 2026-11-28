@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { previewSteam, importSteam, listProducts } from "../api/products";
+import { previewSteam, importSteam, listProducts, refreshSteamRequirements } from "../api/products";
 import {
   completeAdminRefund,
   getVaultStock,
@@ -21,6 +21,7 @@ export function AdminPage() {
   const [created, setCreated] = useState<Product | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
 
   const [products, setProducts] = useState<Product[]>([]);
   const [stock, setStock] = useState<VaultStockSummary[]>([]);
@@ -117,12 +118,31 @@ export function AdminPage() {
 
   const productNames = new Map(products.map((p) => [p.id, p.name]));
 
+  async function syncRequirements() {
+    setBusy(true); setError(""); setSyncMessage("");
+    try {
+      const res = await refreshSteamRequirements();
+      setSyncMessage(`Đã tự động cập nhật cấu hình PC cho ${res.updated} game.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="container">
       <h1>Quản trị</h1>
       <section className="card steam-import">
-        <h2>Import game từ Steam</h2>
-        <p className="muted">Metadata từ Steam/IGDB, giá bán do shop thiết lập (tối thiểu 5.000 đ). Key nhập ở mục Kho Key bên dưới.</p>
+        <div className="row">
+          <h2>Import game từ Steam</h2>
+          <span className="spacer" />
+          <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void syncRequirements()}>
+            Đồng bộ cấu hình PC
+          </button>
+        </div>
+        <p className="muted">Metadata từ Steam/IGDB, tự động bổ sung cấu hình PC qua RAWG/Steam API, giá bán do shop thiết lập (tối thiểu 5.000 đ). Key nhập ở mục Kho Key bên dưới.</p>
+        {syncMessage && <p role="status" className="muted">{syncMessage}</p>}
         <form onSubmit={(e) => { e.preventDefault(); void load(); }}>
           <label htmlFor="steam-app">Steam App ID hoặc URL</label>
           <div className="row">

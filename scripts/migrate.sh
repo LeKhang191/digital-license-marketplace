@@ -183,6 +183,7 @@ fi
 
 docker compose --profile migration run --rm migrator \
     order "$SUPPORT_CLEANUP"
+docker compose --profile migration run --rm migrator order
 docker compose --profile migration run --rm migrator license
 docker compose --profile migration run --rm migrator payment
 

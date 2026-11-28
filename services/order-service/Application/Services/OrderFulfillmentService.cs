@@ -216,6 +216,7 @@ public sealed class OrderFulfillmentService(
         if (status == "ASSIGNED")
         {
             var now = DateTime.UtcNow;
+            order.Status = OrderStatus.Completed;
 
             db.OutboxMessages.Add(new OutboxMessage
             {
@@ -232,6 +233,9 @@ public sealed class OrderFulfillmentService(
                 CreatedAtUtc = now,
                 NextRetryAtUtc = now
             });
+
+            await PartnerWebhookHelper.TryEnqueueAsync(
+                db, order, PartnerWebhookEvents.OrderCompleted, ct);
         }
 
         db.FulfillmentResults.Add(

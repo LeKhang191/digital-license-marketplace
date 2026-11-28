@@ -66,6 +66,16 @@ builder.Services.Configure<RabbitMqOptions>(
 builder.Services.AddSingleton<RabbitMqPublisher>();
 builder.Services.AddHostedService<OutboxWorker>();
 builder.Services.AddScoped<IOrderManager, OrderManager>();
+builder.Services.AddScoped<PartnerOrderService>();
+builder.Services.AddHttpClient("PartnerWebhook", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false
+});
+builder.Services.AddHostedService<PartnerWebhookWorker>();
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();

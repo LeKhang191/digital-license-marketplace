@@ -19,6 +19,8 @@ public static class KeycloakAuthExtensions
                     policy.RequireAuthenticatedUser();
                     policy.RequireRole("catalog_manager");
                 });
+
+            KeycloakAuthentication.ConfigurePartnerPolicy(options);
         });
 
         return services;

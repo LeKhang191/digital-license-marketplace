@@ -26,6 +26,13 @@ builder.Services.AddHttpClient<SteamMetadataProvider>(client =>
     client.BaseAddress = new Uri("https://store.steampowered.com/");
     client.Timeout = TimeSpan.FromSeconds(15);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient("CatalogLicenses", client =>
+{
+    var licenseUrl = builder.Configuration["Services:LicenseUrl"]
+        ?? "http://license-vault:8080";
+    client.BaseAddress = new Uri(licenseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(5);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
 builder.Services.AddControllers();

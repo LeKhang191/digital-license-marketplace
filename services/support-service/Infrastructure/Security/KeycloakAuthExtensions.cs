@@ -26,6 +26,7 @@ public static class KeycloakAuthExtensions
                     !context.User.IsInRole("catalog_manager") &&
                     !context.User.IsInRole("license_coordinator") &&
                     !context.User.IsInRole("transaction_auditor") &&
+                    !context.User.IsInRole("partner_api") &&
                     !context.User.IsInRole("admin"));
             });
 

@@ -1,6 +1,71 @@
 {
   "Routes": [
     {
+      "DownstreamPathTemplate": "/api/partner/v1/orders/{id}/licenses/claim",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "license-vault", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/orders/{id}/licenses/claim",
+      "UpstreamHttpMethod": ["POST"],
+      "Priority": 2
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner/v1/orders/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/orders/{id}",
+      "UpstreamHttpMethod": ["GET"],
+      "Priority": 1
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner/v1/orders",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/orders",
+      "UpstreamHttpMethod": ["GET", "POST"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner/v1/webhook/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/webhook/{everything}",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner/v1/webhook",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/webhook",
+      "UpstreamHttpMethod": ["GET", "PUT"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner/v1/catalog/products/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/catalog/products/{everything}",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner/v1/catalog/products",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/catalog/products",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner/v1/wallet/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "payment", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner/v1/wallet/{everything}",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/partner-admin/wallets/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "payment", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/partner-admin/wallets/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST"]
+    },
+    {
       "DownstreamPathTemplate": "/api/steam-import/preview",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],

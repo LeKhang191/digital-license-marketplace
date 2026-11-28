@@ -17,6 +17,8 @@ public sealed class PaymentDbContext(
     public DbSet<WalletTransaction> WalletTransactions =>
         Set<WalletTransaction>();
 
+    public DbSet<PartnerWalletTopUp> PartnerWalletTopUps =>
+        Set<PartnerWalletTopUp>();
 
     public DbSet<OutboxMessage> OutboxMessages =>
         Set<OutboxMessage>();
@@ -171,7 +173,7 @@ public sealed class PaymentDbContext(
 
             table.HasCheckConstraint(
                 "CK_wallet_transactions_type",
-                "\"Type\" IN ('REFUND', 'PURCHASE')");
+                "\"Type\" IN ('REFUND', 'PURCHASE', 'TOPUP')");
         });
 
         ledger.HasKey(x => x.Id);
@@ -201,6 +203,59 @@ public sealed class PaymentDbContext(
         ledger.HasOne<Wallet>()
             .WithMany()
             .HasForeignKey(x => x.WalletId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        var topUp = modelBuilder.Entity<PartnerWalletTopUp>();
+
+        topUp.ToTable("partner_wallet_topups", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_partner_wallet_topups_amount",
+                "\"Amount\" > 0");
+
+            table.HasCheckConstraint(
+                "CK_partner_wallet_topups_balance",
+                "\"BalanceAfter\" >= 0");
+        });
+
+        topUp.HasKey(x => x.Id);
+
+        topUp.Property(x => x.PartnerId)
+            .HasMaxLength(48)
+            .IsRequired();
+
+        topUp.Property(x => x.IdempotencyKey)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        topUp.Property(x => x.Amount)
+            .HasPrecision(18, 2);
+
+        topUp.Property(x => x.BalanceAfter)
+            .HasPrecision(18, 2);
+
+        topUp.Property(x => x.Note)
+            .HasMaxLength(500);
+
+        topUp.Property(x => x.RequestedBy)
+            .HasMaxLength(64)
+            .IsRequired();
+
+        topUp.HasIndex(x => new
+        {
+            x.PartnerId,
+            x.IdempotencyKey
+        }).IsUnique();
+
+        topUp.HasIndex(x => new
+        {
+            x.PartnerId,
+            x.CreatedAtUtc
+        });
+
+        topUp.HasOne<WalletTransaction>()
+            .WithMany()
+            .HasForeignKey(x => x.WalletTransactionId)
             .OnDelete(DeleteBehavior.Restrict);
 
         var outbox = modelBuilder.Entity<OutboxMessage>();

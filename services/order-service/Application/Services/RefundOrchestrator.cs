@@ -247,6 +247,9 @@ public sealed class RefundOrchestrator(
                         NextRetryAtUtc = DateTime.UtcNow
                     });
 
+                    await PartnerWebhookHelper.TryEnqueueAsync(
+                        db, order, PartnerWebhookEvents.OrderRefunded, ct);
+
                     Advance(operation, "COMPLETED");
 
                     break;

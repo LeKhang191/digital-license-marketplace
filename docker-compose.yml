@@ -78,6 +78,7 @@ services:
       Igdb__ClientId: ${IGDB_CLIENT_ID:-}
       Igdb__ClientSecret: ${IGDB_CLIENT_SECRET:-}
       ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Database=catalog_db;Username=app;Password=${DB_PASSWORD}"
+      Services__LicenseUrl: "http://license-vault:8080"
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/marketplace/.well-known/openid-configuration"
       Keycloak__Issuer: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}/realms/marketplace"
     depends_on:
@@ -99,6 +100,8 @@ services:
       Services__LicenseUrl: "http://license-vault:8080"
       Services__PaymentUrl: "http://payment:8080"
       InternalService__Key: "${PAYMENT_INTERNAL_KEY:?PAYMENT_INTERNAL_KEY required}"
+      PartnerWebhooks__AllowPrivateNetwork: "${PARTNER_WEBHOOK_ALLOW_PRIVATE_NETWORK:-false}"
+      PartnerWebhooks__AllowInsecureHttp: "${PARTNER_WEBHOOK_ALLOW_INSECURE_HTTP:-false}"
       RabbitMq__Host: rabbitmq
       RabbitMq__User: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}

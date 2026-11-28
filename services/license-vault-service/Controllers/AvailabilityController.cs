@@ -40,4 +40,57 @@ public sealed class AvailabilityController(
             inStock = available > 0
         });
     }
+
+    public sealed record BatchAvailabilityRequest(
+        IReadOnlyList<Guid> ProductIds);
+
+    [AllowAnonymous]
+    [HttpPost("batch")]
+    public async Task<IActionResult> Batch(
+        [FromBody] BatchAvailabilityRequest request,
+        CancellationToken ct)
+    {
+        if (request.ProductIds is null || request.ProductIds.Count > 100)
+        {
+            return BadRequest(new
+            {
+                error = "ProductIds must contain at most 100 entries."
+            });
+        }
+
+        var ids = request.ProductIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToArray();
+
+        if (ids.Length == 0)
+            return Ok(new { items = Array.Empty<object>() });
+
+        var allowDemo = config["Kinguin:Mode"] == "Mock" &&
+            config.GetValue<bool>("Kinguin:DemoAutoImport");
+
+        var counts = await db.LicenseKeys
+            .AsNoTracking()
+            .Where(k =>
+                ids.Contains(k.ProductId) &&
+                k.Status == LicenseStatus.Available &&
+                (allowDemo || !db.Set<LicenseImportBatch>().Any(
+                    b => b.Id == k.ImportBatchId && b.Method == "MOCK_API")))
+            .GroupBy(k => k.ProductId)
+            .Select(g => new { ProductId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ProductId, x => x.Count, ct);
+
+        var items = ids.Select(id =>
+        {
+            var available = counts.GetValueOrDefault(id, 0);
+            return new
+            {
+                productId = id,
+                available,
+                inStock = available > 0
+            };
+        }).ToList();
+
+        return Ok(new { items });
+    }
 }

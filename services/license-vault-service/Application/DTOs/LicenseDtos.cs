@@ -31,7 +31,9 @@ public sealed record LicenseInventoryResponse(
     int Total,
     int Available,
     int Assigned,
-    int Disabled
+    int Disabled,
+    decimal AvailableKnownCostVnd = 0,
+    int AvailableKnownCostKeys = 0
 );
 
 public sealed record LicenseKeyResponse(
@@ -39,5 +41,9 @@ public sealed record LicenseKeyResponse(
     Guid ProductId,
     string Status,
     DateTime CreatedAtUtc,
-    DateTime? AssignedAtUtc
+    DateTime? AssignedAtUtc,
+    Guid? ImportBatchId = null,
+    string? SupplierName = null,
+    string? ImportReference = null,
+    decimal? UnitCostVnd = null
 );

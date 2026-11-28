@@ -582,3 +582,9 @@ input,select {background:#18191b;color:var(--color-text);border-color:var(--colo
 .kinguin-integration .btn { align-self:flex-start; }
 .kinguin-integration h2,.kinguin-integration h3 { margin:0; }
 @media(max-width:600px) { .kinguin-selector { grid-template-columns:1fr; } .kinguin-tabs .btn { font-size:12px; } .kinguin-metrics > div { padding:10px; } .kinguin-product img { width:64px; height:85px; } }
+
+/* Inventory health indicators, scoped to the license workspace. */
+.license-workspace .inventory-level { display:inline-block; padding:4px 9px; border-radius:999px; white-space:nowrap; font-size:.85rem; }
+.license-workspace .inventory-level.empty { color:#fca5a5; background:#ef44441a; }
+.license-workspace .inventory-level.low { color:#fbbf24; background:#f59e0b1a; }
+.license-workspace .inventory-level.ok { color:#86efac; background:#22c55e1a; }

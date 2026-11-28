@@ -123,43 +123,33 @@ public sealed class LicenseService(
         GetInventoryAsync(CancellationToken ct)
     {
         var allowDemo = config["Kinguin:Mode"] == "Mock" && config.GetValue<bool>("Kinguin:DemoAutoImport");
-        return await db.LicenseKeys
-            .AsNoTracking()
-            .Where(k => allowDemo || !db.Set<LicenseImportBatch>().Any(b => b.Id == k.ImportBatchId && b.Method == "MOCK_API"))
-            .GroupBy(x => x.ProductId)
-            .Select(g => new LicenseInventoryResponse(
-                g.Key,
-                g.Count(),
-                g.Count(x =>
-                    x.Status == LicenseStatus.Available),
-                g.Count(x =>
-                    x.Status == LicenseStatus.Assigned),
-                g.Count(x =>
-                    x.Status == LicenseStatus.Disabled)
-            ))
+        var keys = db.LicenseKeys.AsNoTracking()
+            .Where(k => allowDemo || !db.Set<LicenseImportBatch>().Any(b => b.Id == k.ImportBatchId && b.Method == "MOCK_API"));
+        return await (from key in keys
+            join batch in db.Set<LicenseImportBatch>() on key.ImportBatchId equals (Guid?)batch.Id into batches
+            from batch in batches.DefaultIfEmpty()
+            group new { key.Status, Cost = (decimal?)batch.UnitCostVnd } by key.ProductId into g
+            select new LicenseInventoryResponse(g.Key, g.Count(),
+                g.Count(x => x.Status == LicenseStatus.Available),
+                g.Count(x => x.Status == LicenseStatus.Assigned),
+                g.Count(x => x.Status == LicenseStatus.Disabled),
+                g.Sum(x => x.Status == LicenseStatus.Available ? x.Cost ?? 0m : 0m),
+                g.Count(x => x.Status == LicenseStatus.Available && x.Cost.HasValue)))
             .ToListAsync(ct);
     }
 
-    public async Task<
-        IReadOnlyList<LicenseKeyResponse>>
-        GetProductLicensesAsync(
-            Guid productId,
-            CancellationToken ct)
+    public async Task<IReadOnlyList<LicenseKeyResponse>> GetProductLicensesAsync(Guid productId, CancellationToken ct)
     {
-        return await db.LicenseKeys
-            .AsNoTracking()
-            .Where(x => x.ProductId == productId)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ThenBy(x => x.Id)
-            .Select(x => new LicenseKeyResponse(
-                x.Id,
-                x.ProductId,
-                x.Status,
-                x.CreatedAtUtc,
-                x.AssignedAtUtc
-            ))
-            .Take(1000)
-            .ToListAsync(ct);
+        var allowDemo = config["Kinguin:Mode"] == "Mock" && config.GetValue<bool>("Kinguin:DemoAutoImport");
+        var keys = db.LicenseKeys.AsNoTracking().Where(k => k.ProductId == productId)
+            .Where(k => allowDemo || !db.Set<LicenseImportBatch>().Any(b => b.Id == k.ImportBatchId && b.Method == "MOCK_API"));
+        return await (from key in keys
+            join batch in db.Set<LicenseImportBatch>() on key.ImportBatchId equals (Guid?)batch.Id into batches
+            from batch in batches.DefaultIfEmpty()
+            orderby key.CreatedAtUtc descending, key.Id
+            select new LicenseKeyResponse(key.Id, key.ProductId, key.Status, key.CreatedAtUtc,
+                key.AssignedAtUtc, key.ImportBatchId, batch.SupplierName, batch.Reference, batch.UnitCostVnd))
+            .Take(1000).ToListAsync(ct);
     }
 
     public async Task<bool> DisableAsync(

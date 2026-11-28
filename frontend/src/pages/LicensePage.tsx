@@ -1,3 +1,6 @@
+import { inventoryRows, stockLevel, stockValuation } from "./inventoryMetrics";
+import { InventoryReplacementHistory } from "./InventoryReplacementHistory";
+import { vnd } from "../components/format";
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -51,6 +54,8 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
   const [batchError, setBatchError] = useState("");
   const [batchFilter, setBatchFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [lowThreshold, setLowThreshold] = useState(5);
   const [statusFilter, setStatusFilter] = useState("all");
   const [showTestProducts, setShowTestProducts] = useState(false);
   const [lookupId, setLookupId] = useState("");
@@ -73,7 +78,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
   const [inventory, setInventory] = useState<LicenseInventory[]>([]);
   const [licenses, setLicenses] = useState<LicenseKey[]>([]);
 
-  const [productId, setProductId] = useState("");
+  const [productId, setProductId] = useState(() => isImport ? params.get("product") ?? "" : "");
   const [supplierQuantity, setSupplierQuantity] = useState(1);
   const [supplierQuote, setSupplierQuote] = useState<KinguinQuote | null>(null);
   const [supplierError, setSupplierError] = useState("");
@@ -239,8 +244,8 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
 
         setProductId((current) => {
           const exists =
-            items.some((p) => p.id === current) ||
-            stock.some((i) => i.productId === current);
+            items.some((p) => p.id === current && (!isImport || p.isActive)) ||
+            (!isImport && stock.some((i) => i.productId === current));
 
           if (current && exists) return current;
 
@@ -264,7 +269,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     return () => {
       cancelled = true;
     };
-  }, [isInventory, ready, isLicenseCoordinator, refreshVersion]);
+  }, [isInventory, isImport, ready, isLicenseCoordinator, refreshVersion]);
 
   useEffect(() => {
     setLicenses([]);
@@ -454,7 +459,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     ) return;
 
     const confirmed = window.confirm(
-      "Bạn có chắc muốn vô hiệu hóa License Key này?"
+      "Vô hiệu hóa key này sẽ loại key khỏi kho khả dụng. Bạn có chắc muốn tiếp tục?"
     );
 
     if (!confirmed) return;
@@ -501,7 +506,15 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
   const matches = (name: string) => name.toLocaleLowerCase("vi").includes(search.trim().toLocaleLowerCase("vi"));
   const isTestProduct = (p: Product) => /^TEST(?:\s|$)/i.test(p.name) || /^(?:license-vault-test|allocation-)/i.test(p.slug);
   const filteredProducts = products.filter(p => p.isActive && (showTestProducts || !isTestProduct(p)) && matches(p.name + " " + p.slug));
-  const filteredInventory = inventory.filter(item => matches(productName(item.productId) + " " + item.productId));
+  const activeStockProducts = products.filter(p => p.isActive && (showTestProducts || !isTestProduct(p)));
+  const allStockRows = inventoryRows(inventory, activeStockProducts).filter(row => showTestProducts || !products.some(p => p.id === row.productId && isTestProduct(p)));
+  const activeIds = new Set(activeStockProducts.map(p => p.id));
+  const lowCount = allStockRows.filter(row => activeIds.has(row.productId) && stockLevel(row.available, lowThreshold) === "low").length;
+  const emptyCount = allStockRows.filter(row => activeIds.has(row.productId) && row.available === 0).length;
+  const stockCost = allStockRows.reduce((sum, row) => sum + stockValuation(row).knownCost, 0);
+  const unknownCost = allStockRows.reduce((sum, row) => sum + stockValuation(row).unknownKeys, 0);
+  const filteredInventory = allStockRows.filter(item => matches(productName(item.productId) + " " + item.productId) &&
+    (stockFilter === "all" || stockLevel(item.available, lowThreshold) === stockFilter));
   const filteredLicenses = licenses.filter(item => statusFilter === "all" || item.status === statusFilter);
 
   return (
@@ -855,6 +868,17 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
       </section>}
 
       {isInventory && <>
+      <section className="card">
+        <h2>Cảnh báo tồn kho &amp; giá vốn</h2>
+        <div className="grid admin-summary license-summary">
+          <div className="card"><h2>Sắp hết hàng</h2><strong>{loading ? "—" : lowCount}</strong></div>
+          <div className="card"><h2>Hết hàng</h2><strong>{loading ? "—" : emptyCount}</strong></div>
+          <div className="card"><h2>Giá vốn tồn khả dụng đã biết</h2><strong>{loading ? "—" : vnd(stockCost)}</strong></div>
+          <div className="card"><h2>Key chưa có giá vốn</h2><strong>{loading ? "—" : unknownCost}</strong></div>
+        </div>
+        <p className="muted">Cảnh báo cho sản phẩm đang mở bán, kể cả chưa nhập key. Giá vốn chỉ tính key khả dụng có giá nhập đã ghi nhận.</p>
+        <label>Ngưỡng cảnh báo <select value={lowThreshold} onChange={e => setLowThreshold(Number(e.target.value))}>{[1,3,5,10,20].map(n => <option key={n} value={n}>{n} key</option>)}</select></label>
+      </section>
       <div className="card admin-table-container">
         <div className="row admin-toolbar">
           <h2>Tồn kho theo sản phẩm</h2>
@@ -899,6 +923,9 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
         </div>
 
         <label>Tìm trong kho <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên hoặc mã sản phẩm" /></label>
+        <label>Trạng thái tồn kho <select value={stockFilter} onChange={e => setStockFilter(e.target.value)}><option value="all">Tất cả</option><option value="low">Sắp hết</option><option value="empty">Hết hàng</option><option value="ok">Đủ hàng</option></select></label>
+        <label><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} /> Hiện sản phẩm kiểm thử</label>
+        <p className="muted">Biên gộp dự kiến = giá bán hiện tại × số key có giá vốn − giá vốn tương ứng; không phải lợi nhuận thực tế, chưa tính phí và hoàn tiền.</p>
         {loading ? (
           <p className="muted">Đang tải tồn kho...</p>
         ) : filteredInventory.length === 0 ? (
@@ -914,12 +941,16 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                 <th>Khả dụng</th>
                 <th>Đã cấp</th>
                 <th>Vô hiệu hóa</th>
+                <th>Cảnh báo</th><th>Giá vốn tồn khả dụng</th><th>Biên gộp dự kiến</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
 
             <tbody>
-              {filteredInventory.map((item) => (
+              {filteredInventory.map((item) => {
+                const valuation = stockValuation(item, products.find(p => p.id === item.productId)?.price);
+                const level = stockLevel(item.available, lowThreshold);
+                return (
                 <tr key={item.productId}>
                   <td>
                     <strong>
@@ -936,6 +967,9 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                   <td>{item.assigned}</td>
 
                   <td>{item.disabled}</td>
+                  <td><span className={`inventory-level ${level}`}>{level === "empty" ? "Hết hàng" : level === "low" ? "Sắp hết" : "Đủ hàng"}</span></td>
+                  <td>{valuation.knownKeys ? vnd(valuation.knownCost) : "—"}{valuation.unknownKeys > 0 && <div className="muted">{valuation.unknownKeys} key chưa rõ giá</div>}</td>
+                  <td>{valuation.estimatedMargin === null ? "—" : vnd(valuation.estimatedMargin)}</td>
 
                   <td>
                     <button
@@ -953,9 +987,10 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                     >
                       Xem kho
                     </button>
+                    {activeIds.has(item.productId) && level !== "ok" && <NavLink className="btn btn-secondary" to={`/licenses/import?product=${encodeURIComponent(item.productId)}`}>Nhập thêm</NavLink>}
                   </td>
                 </tr>
-              ))}
+              ); })}
             </tbody>
           </table>
         )}
@@ -973,6 +1008,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
           </p>
         )}
 
+        <p className="muted">Key lỗi chưa cấp phát có thể được vô hiệu hóa để ngừng bán. Key đã giao phải xử lý qua yêu cầu hỗ trợ; không vô hiệu hóa trực tiếp.</p>
         <label>Trạng thái <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">Tất cả</option><option value="AVAILABLE">Khả dụng</option><option value="ASSIGNED">Đã cấp phát</option><option value="DISABLED">Vô hiệu hóa</option></select></label>
         {detailError && (
           <div className="alert">{detailError}</div>
@@ -1004,6 +1040,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                   <th>Trạng thái</th>
                   <th>Ngày nhập</th>
                   <th>Ngày cấp phát</th>
+                  <th>Nguồn hàng / lô nhập</th><th>Giá vốn</th>
                   <th>Thao tác</th>
                 </tr>
               </thead>
@@ -1046,6 +1083,8 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                         : "—"}
                     </td>
 
+                    <td>{license.supplierName ?? "Chưa ghi nhận"}<div className="muted">{license.importReference ?? license.importBatchId?.slice(0,8) ?? "—"}</div></td>
+                    <td>{license.unitCostVnd == null ? "—" : vnd(license.unitCostVnd)}</td>
                     <td>
                       <button
                         className="btn btn-danger"
@@ -1069,6 +1108,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
           </>
         )}
       </div>
+      {productId && <InventoryReplacementHistory key={productId} productId={productId} refreshVersion={refreshVersion} />}
       </>}
     </div>
   );

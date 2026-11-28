@@ -69,6 +69,10 @@ export interface LicenseKey {
   status: LicenseStatus;
   createdAtUtc: string;
   assignedAtUtc: string | null;
+  importBatchId?: string | null;
+  supplierName?: string | null;
+  importReference?: string | null;
+  unitCostVnd?: number | null;
 }
 
 export interface LicenseInventory {
@@ -77,6 +81,8 @@ export interface LicenseInventory {
   available: number;
   assigned: number;
   disabled: number;
+  availableKnownCostVnd?: number;
+  availableKnownCostKeys?: number;
 }
 
 export interface ImportLicensesRequest {

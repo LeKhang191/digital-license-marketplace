@@ -156,3 +156,6 @@ export interface Supplier extends SupplierInput { id: string; batchCount: number
 export const listSuppliers = () => api<Supplier[]>("/licenses/suppliers", {auth:true, cache:"no-store"});
 export const saveSupplier = (data: SupplierInput, id?: string) => api<{id:string}>(`/licenses/suppliers${id ? `/${encodeURIComponent(id)}` : ""}`, {auth:true, method:id?"PATCH":"POST", body:JSON.stringify(data)});
 export const listSupplierBatches = (id: string) => api<ImportBatch[]>(`/licenses/suppliers/${encodeURIComponent(id)}/batches`, {auth:true,cache:"no-store"});
+
+export interface ReplacementHistoryItem { ticketId: string; oldLicenseId: string; newLicenseId: string; createdAtUtc: string }
+export const listReplacementHistory = (productId: string) => api<ReplacementHistoryItem[]>(`/licenses/replacement-history/${encodeURIComponent(productId)}`, { auth: true, cache: "no-store" });

@@ -183,6 +183,13 @@ public sealed class LicensesController(
     public async Task<IActionResult> ImportBatches(CancellationToken ct) => Ok(await db.Set<LicenseImportBatch>()
         .AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Take(200).ToListAsync(ct));
 
+    [HttpGet("replacement-history/{productId:guid}")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> ReplacementHistory(Guid productId, CancellationToken ct) => Ok(
+        await db.LicenseReplacements.AsNoTracking().Where(x => x.ProductId == productId)
+            .OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.TicketId).Take(200)
+            .Select(x => new { x.TicketId, x.OldLicenseId, x.NewLicenseId, x.CreatedAtUtc }).ToListAsync(ct));
+
     private async Task<IActionResult> ImportKeys(
         Guid productId,
         IReadOnlyList<string> keys,

@@ -7,6 +7,7 @@ interface AuthState {
   ready: boolean;
   authenticated: boolean;
   username?: string;
+  subject?: string;
 
   roles: string[];
 
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ready,
     authenticated,
     username: keycloak.tokenParsed?.preferred_username as string | undefined,
+    subject: authenticated ? keycloak.tokenParsed?.sub : undefined,
 
     roles,
     isAdmin,

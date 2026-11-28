@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getProduct } from "../api/products";
 import type { Product } from "../api/types";
@@ -17,13 +17,22 @@ export function ProductPage() {
     ready,
     authenticated,
     isCustomer,
-    login,
   } = useAuth();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [addedNotice, setAddedNotice] = useState(false);
+
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setAddedNotice(false);
+    return () => {
+      if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+      noticeTimer.current = null;
+    };
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,12 +59,7 @@ export function ProductPage() {
   function buyNow() {
     if (!product || !ready) return;
 
-    if (!authenticated) {
-      login();
-      return;
-    }
-
-    if (!isCustomer) {
+    if (authenticated && !isCustomer) {
       setError("Chỉ khách hàng mới có thể mua sản phẩm.");
       return;
     }
@@ -64,9 +68,14 @@ export function ProductPage() {
   }
 
   function addToCart() {
-    if (!product || !ready) return;
+    if (!product || !ready || (authenticated && !isCustomer)) return;
     addItem(product, quantity);
     setAddedNotice(true);
+    if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => {
+      setAddedNotice(false);
+      noticeTimer.current = null;
+    }, 5000);
     setError(null);
   }
 
@@ -131,9 +140,7 @@ export function ProductPage() {
                   className="btn"
                   onClick={buyNow}
                 >
-                  {authenticated
-                    ? "Mua ngay"
-                    : "Đăng nhập để mua"}
+                  Mua ngay
                 </button>
 
                 <button
@@ -145,11 +152,11 @@ export function ProductPage() {
                 </button>
               </div>
 
-              {addedNotice && (
-                <p role="status" className="kinguin-ok" style={{ marginTop: 10 }}>
+              <div className="cart-added-slot" role="status">
+                <div className="cart-added-inline" hidden={!addedNotice}>
                   Đã thêm vào giỏ hàng. <Link to="/cart">Xem giỏ hàng →</Link>
-                </p>
-              )}
+                </div>
+              </div>
 
               <div className="purchase-total" aria-live="polite">
                 <strong>Tổng thanh toán: </strong>

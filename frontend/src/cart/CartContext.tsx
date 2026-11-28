@@ -1,13 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Product } from "../api/types";
 
-export interface CartItem {
-  productId: string;
-  name: string;
-  price: number;
-  image?: string;
-  quantity: number;
-}
+import { useAuth } from "../auth/AuthProvider";
+import { CART_STORAGE_KEY, GUEST_SCOPE, activateScope, customerScope, mergeItems, normalizeQuantity, readStore, type CartItem, type CartStore } from "./cartStorage";
+export type { CartItem } from "./cartStorage";
 
 interface CartContextValue {
   items: CartItem[];
@@ -19,69 +15,68 @@ interface CartContextValue {
   clearCart: () => void;
 }
 
-const STORAGE_KEY = "dlm_cart_v1";
-
-function loadInitialCart(): CartItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (i): i is CartItem =>
-        i &&
-        typeof i.productId === "string" &&
-        typeof i.name === "string" &&
-        typeof i.price === "number" &&
-        typeof i.quantity === "number" &&
-        i.quantity >= 1,
-    );
-  } catch {
-    return [];
-  }
-}
-
 const CartContext = createContext<CartContextValue | null>(null);
 
-export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(loadInitialCart);
+// A single storage write transfers the guest cart and clears it together.
+// Never adopt dlm_cart_v1: its owner cannot be determined reliably.
+let memoryStore: CartStore = Object.create(null);
+let storageFailed = false;
+function loadStore(): CartStore {
+  if (storageFailed) return memoryStore;
+  try { return readStore(localStorage.getItem(CART_STORAGE_KEY)); }
+  catch { return memoryStore; }
+}
+function saveStore(store: CartStore) {
+  memoryStore = store;
+  try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(store)); }
+  catch { storageFailed = true; /* Keep the current session in memory. */ }
+}
 
+export function CartProvider({ children }: { children: ReactNode }) {
+  const { ready, authenticated, isCustomer, subject } = useAuth();
+  const scope = !ready ? null : !authenticated ? GUEST_SCOPE :
+    isCustomer && subject ? customerScope(subject) : null;
+  return <ScopedCart key={scope ?? "disabled"} scope={scope}>{children}</ScopedCart>;
+}
+
+function ScopedCart({ children, scope }: { children: ReactNode; scope: string | null }) {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {
-      // Ignore storage quota errors.
+    if (scope) {
+      const before = loadStore();
+      const after = activateScope(before, scope);
+      if (after !== before) saveStore(after);
+      setItems(after[scope] ?? []);
     }
-  }, [items]);
+    setLoaded(true);
+  }, [scope]);
+
+  function change(update: (previous: CartItem[]) => CartItem[]) {
+    if (!scope || !loaded) return;
+    const store = loadStore();
+    const next = update(store[scope] ?? []);
+    saveStore({ ...store, [scope]: next });
+    setItems(next);
+  }
 
   function addItem(product: Product, quantity: number) {
-    const qty = Math.min(10, Math.max(1, Math.trunc(quantity)));
     const image = product.steam?.posterImage || product.steam?.headerImage || undefined;
-    setItems((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.productId === product.id
-            ? { ...i, name: product.name, price: product.price, image: image ?? i.image, quantity: Math.min(10, i.quantity + qty) }
-            : i,
-        );
-      }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, image, quantity: qty }];
-    });
+    change(prev => mergeItems(prev, [{ productId: product.id, name: product.name,
+      price: product.price, image, quantity: normalizeQuantity(quantity) }]));
   }
 
   function updateQuantity(productId: string, quantity: number) {
-    const qty = Math.min(10, Math.max(1, Math.trunc(quantity)));
-    setItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, quantity: qty } : i)));
+    change(prev => prev.map(i => i.productId === productId ? { ...i, quantity: normalizeQuantity(quantity) } : i));
   }
 
   function removeItem(productId: string) {
-    setItems((prev) => prev.filter((i) => i.productId !== productId));
+    change(prev => prev.filter(i => i.productId !== productId));
   }
 
-  function clearCart() {
-    setItems([]);
-  }
+  function clearCart() { change(() => []); }
+
+  if (scope && !loaded) return <p role="status">Đang tải giỏ hàng...</p>;
 
   const totalCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);

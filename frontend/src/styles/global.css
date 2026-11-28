@@ -642,3 +642,9 @@ input,select {background:#18191b;color:var(--color-text);border-color:var(--colo
 .payment-option input { margin-top:4px; }
 .wallet-balance-box { display:flex; flex-direction:column; gap:6px; margin-top:14px; padding:16px; border:1px solid #ffffff20; border-radius:12px; background:#ffffff07; }
 @media(max-width:860px) { .checkout-layout { grid-template-columns:1fr; } .checkout-summary { position:static; } }
+
+/* Reserve the message space inside the purchase card, including wrapped text. */
+.cart-added-slot { display:grid; margin-top:10px; min-width:0; }
+.cart-added-inline { grid-area:1 / 1; color:#86efac; font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+.cart-added-inline[hidden] { display:block; visibility:hidden; }
+.cart-added-inline a { color:inherit; text-decoration:underline; }

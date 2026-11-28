@@ -540,13 +540,6 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
         {isInventory ? "Theo dõi tồn kho và trạng thái license." : isImport ? "Nhập key cho sản phẩm đang mở bán trong Catalog." : isHistory ? "Theo dõi các lô nhập kho, đơn API nhà cung cấp và lịch sử đổi key." : "Quản lý nguồn nhập hàng và các kết nối API đã tích hợp."}
       </p>
 
-      <nav className="license-nav" aria-label="Quản lý license">
-        <NavLink end to="/licenses">Xem kho</NavLink>
-        <NavLink to="/licenses/import">Nhập kho</NavLink>
-        <NavLink to="/licenses/suppliers">Nhà cung cấp</NavLink>
-        <NavLink to="/licenses/history">Lịch sử</NavLink>
-      </nav>
-
       {isInventory && <div className="grid admin-summary license-summary">
         <div className="card">
           <h2>Tổng License Key</h2>

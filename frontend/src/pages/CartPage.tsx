@@ -5,10 +5,12 @@ import { vnd } from "../components/format";
 
 export function CartPage() {
   const navigate = useNavigate();
-  const { ready, authenticated, isCustomer, login } = useAuth();
+  const { ready, authenticated, isCustomer } = useAuth();
   const { items, totalCount, totalAmount, updateQuantity, removeItem, clearCart } = useCart();
 
   const overLimit = totalCount > 20;
+  if (!ready) return <div className="container"><p role="status">Đang kiểm tra tài khoản...</p></div>;
+  if (authenticated && !isCustomer) return <div className="container"><div className="alert">Tài khoản nhân viên không thể sử dụng giỏ hàng.</div><Link to="/">Quay về cửa hàng</Link></div>;
 
   return (
     <div className="container">
@@ -111,7 +113,8 @@ export function CartPage() {
                 type="button"
                 className="btn"
                 style={{ width: "100%", marginTop: 16 }}
-                onClick={login}
+                disabled={overLimit}
+                onClick={() => navigate("/checkout")}
               >
                 Đăng nhập để thanh toán
               </button>

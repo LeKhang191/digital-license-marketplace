@@ -3,6 +3,7 @@
 
 import getpass
 import json
+import os
 import subprocess
 import time
 import uuid
@@ -16,8 +17,9 @@ from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parent.parent
 
-API = "http://localhost:8000/api"
-KEYCLOAK = "http://localhost:8081"
+API_BASE = os.getenv("API_BASE", "http://localhost:8000").rstrip("/")
+API = f"{API_BASE}/api"
+KEYCLOAK = os.getenv("KEYCLOAK_URL", "http://localhost:8081").rstrip("/")
 
 RUN_ID = uuid.uuid4().hex[:12]
 

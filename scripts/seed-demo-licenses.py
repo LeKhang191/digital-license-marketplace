@@ -3,6 +3,7 @@
 import argparse
 import getpass
 import json
+import os
 import subprocess
 import sys
 import uuid
@@ -14,9 +15,11 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parent.parent
-API = "http://localhost:8000/api"
+API_BASE = os.getenv("API_BASE", "http://localhost:8000").rstrip("/")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://localhost:8081").rstrip("/")
+API = f"{API_BASE}/api"
 AUTH = (
-    "http://localhost:8081/realms/marketplace/"
+    f"{KEYCLOAK_URL}/realms/marketplace/"
     "protocol/openid-connect/token"
 )
 

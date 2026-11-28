@@ -1,27 +1,38 @@
 
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getProduct } from "../api/products";
-import { createOrder } from "../api/orders";
 import type { Product } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { useCart } from "../cart/CartContext";
 import { ProductArtwork } from "../components/ProductCard";
 import { vnd } from "../components/format";
 
 export function ProductPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { addItem } = useCart();
 
   const {
     ready,
     authenticated,
     isCustomer,
-    login,
   } = useAuth();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [addedNotice, setAddedNotice] = useState(false);
+
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setAddedNotice(false);
+    return () => {
+      if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+      noticeTimer.current = null;
+    };
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,39 +56,27 @@ export function ProductPage() {
     };
   }, [id]);
 
-  async function buy() {
-    if (!product || !ready || busy) return;
+  function buyNow() {
+    if (!product || !ready) return;
 
-    if (!authenticated) {
-      login();
-      return;
-    }
-
-    if (!isCustomer) {
+    if (authenticated && !isCustomer) {
       setError("Chỉ khách hàng mới có thể mua sản phẩm.");
       return;
     }
 
-    setBusy(true);
+    navigate(`/checkout?productId=${encodeURIComponent(product.id)}&qty=${quantity}`);
+  }
+
+  function addToCart() {
+    if (!product || !ready || (authenticated && !isCustomer)) return;
+    addItem(product, quantity);
+    setAddedNotice(true);
+    if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => {
+      setAddedNotice(false);
+      noticeTimer.current = null;
+    }, 5000);
     setError(null);
-
-    try {
-      const order = await createOrder(product.id, quantity);
-
-      if (order.paymentUrl) {
-        window.location.href = order.paymentUrl;
-      } else {
-        setError("Không nhận được link thanh toán.");
-      }
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Không thể tạo đơn hàng."
-      );
-    } finally {
-      setBusy(false);
-    }
   }
 
   const canPurchase =
@@ -126,27 +125,37 @@ export function ProductPage() {
                 <div className="quantity-control">
                   <label htmlFor="purchase-quantity">Số lượng</label>
                   <div className="quantity-stepper">
-                    <button type="button" aria-label="Giảm số lượng" disabled={busy || quantity <= 1}
+                    <button type="button" aria-label="Giảm số lượng" disabled={quantity <= 1}
                       onClick={() => setQuantity(n => Math.max(1, n - 1))}>−</button>
                     <input id="purchase-quantity" type="number" min={1} max={10} step={1}
-                      value={quantity} disabled={busy}
+                      value={quantity}
                       onChange={e => setQuantity(Math.min(10, Math.max(1, Math.trunc(Number(e.target.value) || 1))))} />
-                    <button type="button" aria-label="Tăng số lượng" disabled={busy || quantity >= 10}
+                    <button type="button" aria-label="Tăng số lượng" disabled={quantity >= 10}
                       onClick={() => setQuantity(n => Math.min(10, n + 1))}>+</button>
                   </div>
                 </div>
 
                 <button
+                  type="button"
                   className="btn"
-                  onClick={buy}
-                  disabled={busy}
+                  onClick={buyNow}
                 >
-                  {busy
-                    ? "Đang tạo đơn..."
-                    : authenticated
-                      ? "Mua và thanh toán"
-                      : "Đăng nhập để mua"}
+                  Mua ngay
                 </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={addToCart}
+                >
+                  Thêm vào giỏ
+                </button>
+              </div>
+
+              <div className="cart-added-slot" role="status">
+                <div className="cart-added-inline" hidden={!addedNotice}>
+                  Đã thêm vào giỏ hàng. <Link to="/cart">Xem giỏ hàng →</Link>
+                </div>
               </div>
 
               <div className="purchase-total" aria-live="polite">

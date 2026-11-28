@@ -1,9 +1,11 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { listOrders, payOrder } from "../api/orders";
-import type { Order } from "../api/types";
+import { listProducts } from "../api/products";
+import type { Order, Product } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { ReceiptDialog, buildOrderReceipt, type ReceiptData } from "../components/ReceiptDialog";
 import { StatusBadge } from "../components/StatusBadge";
 import { vnd } from "../components/format";
 
@@ -16,8 +18,11 @@ export function OrdersPage() {
   } = useAuth();
 
   const [orders, setOrders] = useState<Order[] | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const payingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,9 +33,12 @@ export function OrdersPage() {
     if (!ready || !authenticated || !isCustomer)
       return;
 
-    listOrders()
-      .then((data) => {
-        if (!cancelled) setOrders(data);
+    Promise.all([listOrders(), listProducts({ page: 1 }).catch(() => null)])
+      .then(([data, prods]) => {
+        if (!cancelled) {
+          setOrders(data);
+          if (prods) setProducts(prods.items);
+        }
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
@@ -41,10 +49,13 @@ export function OrdersPage() {
     };
   }, [ready, authenticated, isCustomer]);
 
+  const productName = (id: string) => products.find((p) => p.id === id)?.name ?? `Sản phẩm ${id.slice(0, 8)}`;
+
   async function repay(id: string) {
-    if (!ready || !authenticated || !isCustomer || payingId)
+    if (!ready || !authenticated || !isCustomer || payingId || payingRef.current)
       return;
 
+    payingRef.current = true;
     setPayingId(id);
     setError(null);
 
@@ -58,15 +69,16 @@ export function OrdersPage() {
       }
 
       window.location.href = order.paymentUrl;
+      return;
     } catch (e) {
       setError(
         e instanceof Error
           ? e.message
           : "Không thể thanh toán đơn hàng."
       );
-    } finally {
-      setPayingId(null);
     }
+    payingRef.current = false;
+    setPayingId(null);
   }
 
   if (!ready) {
@@ -173,25 +185,55 @@ export function OrdersPage() {
             )}
 
             {o.status === "COMPLETED" && (
-              <p>
+              <div className="supplier-actions" style={{ marginTop: 12 }}>
                 <Link
                   className="btn"
                   to={`/my-licenses?orderId=${o.id}`}
                 >
                   Xem License Key
                 </Link>
-              </p>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setReceipt(buildOrderReceipt(o, productName))}
+                >
+                  Xem chứng từ
+                </button>
+              </div>
             )}
 
             {o.status === "PAID" && (
-              <p className="muted">
-                Đã thanh toán. Đơn hàng đang được xử lý.
-                Vui lòng không thanh toán lại.
-              </p>
+              <div style={{ marginTop: 12 }}>
+                <p className="muted">
+                  Đã thanh toán. Đơn hàng đang được xử lý.
+                  Vui lòng không thanh toán lại.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ marginTop: 8 }}
+                  onClick={() => setReceipt(buildOrderReceipt(o, productName))}
+                >
+                  Xem chứng từ
+                </button>
+              </div>
+            )}
+
+            {(o.status === "REFUNDING" || o.status === "REFUNDED") && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setReceipt(buildOrderReceipt(o, productName))}
+                >
+                  Xem chứng từ
+                </button>
+              </div>
             )}
           </div>
         ))}
       </div>
+      <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} />
     </div>
   );
 }

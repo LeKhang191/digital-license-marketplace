@@ -45,6 +45,7 @@ export interface Order {
   createdAtUtc: string;
   items: OrderItem[];
   paymentUrl?: string | null;
+  paymentMethod?: string;
 }
 
 

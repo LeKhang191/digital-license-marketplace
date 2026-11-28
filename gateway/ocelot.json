@@ -66,6 +66,13 @@
       "UpstreamHttpMethod": ["GET", "POST"]
     },
     {
+      "DownstreamPathTemplate": "/api/transactions",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "order", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/transactions",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
       "DownstreamPathTemplate": "/api/steam-import/preview",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "catalog", "Port": 8080 }],

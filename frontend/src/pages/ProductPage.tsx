@@ -1,15 +1,17 @@
 
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getProduct } from "../api/products";
-import { createOrder } from "../api/orders";
 import type { Product } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { useCart } from "../cart/CartContext";
 import { ProductArtwork } from "../components/ProductCard";
 import { vnd } from "../components/format";
 
 export function ProductPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { addItem } = useCart();
 
   const {
     ready,
@@ -21,7 +23,7 @@ export function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [addedNotice, setAddedNotice] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,8 +47,8 @@ export function ProductPage() {
     };
   }, [id]);
 
-  async function buy() {
-    if (!product || !ready || busy) return;
+  function buyNow() {
+    if (!product || !ready) return;
 
     if (!authenticated) {
       login();
@@ -58,26 +60,14 @@ export function ProductPage() {
       return;
     }
 
-    setBusy(true);
+    navigate(`/checkout?productId=${encodeURIComponent(product.id)}&qty=${quantity}`);
+  }
+
+  function addToCart() {
+    if (!product || !ready) return;
+    addItem(product, quantity);
+    setAddedNotice(true);
     setError(null);
-
-    try {
-      const order = await createOrder(product.id, quantity);
-
-      if (order.paymentUrl) {
-        window.location.href = order.paymentUrl;
-      } else {
-        setError("Không nhận được link thanh toán.");
-      }
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Không thể tạo đơn hàng."
-      );
-    } finally {
-      setBusy(false);
-    }
   }
 
   const canPurchase =
@@ -126,28 +116,40 @@ export function ProductPage() {
                 <div className="quantity-control">
                   <label htmlFor="purchase-quantity">Số lượng</label>
                   <div className="quantity-stepper">
-                    <button type="button" aria-label="Giảm số lượng" disabled={busy || quantity <= 1}
+                    <button type="button" aria-label="Giảm số lượng" disabled={quantity <= 1}
                       onClick={() => setQuantity(n => Math.max(1, n - 1))}>−</button>
                     <input id="purchase-quantity" type="number" min={1} max={10} step={1}
-                      value={quantity} disabled={busy}
+                      value={quantity}
                       onChange={e => setQuantity(Math.min(10, Math.max(1, Math.trunc(Number(e.target.value) || 1))))} />
-                    <button type="button" aria-label="Tăng số lượng" disabled={busy || quantity >= 10}
+                    <button type="button" aria-label="Tăng số lượng" disabled={quantity >= 10}
                       onClick={() => setQuantity(n => Math.min(10, n + 1))}>+</button>
                   </div>
                 </div>
 
                 <button
+                  type="button"
                   className="btn"
-                  onClick={buy}
-                  disabled={busy}
+                  onClick={buyNow}
                 >
-                  {busy
-                    ? "Đang tạo đơn..."
-                    : authenticated
-                      ? "Mua và thanh toán"
-                      : "Đăng nhập để mua"}
+                  {authenticated
+                    ? "Mua ngay"
+                    : "Đăng nhập để mua"}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={addToCart}
+                >
+                  Thêm vào giỏ
                 </button>
               </div>
+
+              {addedNotice && (
+                <p role="status" className="kinguin-ok" style={{ marginTop: 10 }}>
+                  Đã thêm vào giỏ hàng. <Link to="/cart">Xem giỏ hàng →</Link>
+                </p>
+              )}
 
               <div className="purchase-total" aria-live="polite">
                 <strong>Tổng thanh toán: </strong>

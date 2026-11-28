@@ -133,19 +133,51 @@ public sealed class OrderManager(
         if (method is not ("VNPAY" or "WALLET"))
             return (null, OrderErrors.InvalidPaymentMethod);
 
-        var product = await catalog.GetProductAsync(request.ProductId, ct);
-
-        if (product is null || !product.IsActive)
+        var requestedItems = new Dictionary<Guid, int>();
+        if (request.Items is { Count: > 0 })
+        {
+            foreach (var item in request.Items)
+            {
+                if (item.ProductId == Guid.Empty || item.Quantity is < 1 or > 10)
+                    return (null, OrderErrors.ProductNotFound);
+                requestedItems[item.ProductId] =
+                    requestedItems.GetValueOrDefault(item.ProductId) + item.Quantity;
+            }
+        }
+        else if (request.ProductId != Guid.Empty)
+        {
+            requestedItems[request.ProductId] = request.Quantity;
+        }
+        else
+        {
             return (null, OrderErrors.ProductNotFound);
+        }
 
-        var available = await licenses.GetAvailableAsync(
-            product.Id, ct);
+        if (requestedItems.Values.Sum() is < 1 or > 20)
+            return (null, OrderErrors.NotPayable);
 
-        if (available is null)
-            return (null, OrderErrors.InventoryUnavailable);
+        var resolvedLines = new List<(Guid ProductId, decimal Price, int Quantity)>();
+        decimal totalAmount = 0m;
 
-        if (available.Value < request.Quantity)
-            return (null, OrderErrors.InsufficientStock);
+        foreach (var (productId, qty) in requestedItems)
+        {
+            var product = await catalog.GetProductAsync(productId, ct);
+
+            if (product is null || !product.IsActive)
+                return (null, OrderErrors.ProductNotFound);
+
+            var available = await licenses.GetAvailableAsync(
+                product.Id, ct);
+
+            if (available is null)
+                return (null, OrderErrors.InventoryUnavailable);
+
+            if (available.Value < qty)
+                return (null, OrderErrors.InsufficientStock);
+
+            resolvedLines.Add((product.Id, product.Price, qty));
+            totalAmount += product.Price * qty;
+        }
 
         var order = new Order
         {
@@ -155,17 +187,20 @@ public sealed class OrderManager(
                 && !string.IsNullOrWhiteSpace(email),
             PaymentMethod = method,
             Status = OrderStatus.Pending,
-            TotalAmount = product.Price * request.Quantity
+            TotalAmount = totalAmount
         };
 
-        for (var i = 0; i < request.Quantity; i++)
+        foreach (var line in resolvedLines)
         {
-            order.Items.Add(new OrderItem
+            for (var i = 0; i < line.Quantity; i++)
             {
-                OrderId = order.Id,
-                ProductId = product.Id,
-                Price = product.Price
-            });
+                order.Items.Add(new OrderItem
+                {
+                    OrderId = order.Id,
+                    ProductId = line.ProductId,
+                    Price = line.Price
+                });
+            }
         }
 
         // Persist the Wallet reference before Payment can publish.

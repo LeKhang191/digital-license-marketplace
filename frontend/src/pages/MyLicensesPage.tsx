@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { listMyLicenses, revealMyLicense } from "../api/licenses";
 import { getProduct } from "../api/products";
@@ -15,16 +15,19 @@ function LicenseCard({
   const [key, setKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const confirmDialog = useRef<HTMLDialogElement>(null);
 
-  async function reveal() {
+  useEffect(() => {
+    const d = confirmDialog.current;
+    if (!d) return;
+    if (confirmOpen && !d.open) d.showModal();
+    else if (!confirmOpen && d.open) d.close();
+  }, [confirmOpen]);
+
+  async function doReveal() {
     if (busy) return;
-
-    if (key !== null) {
-      setKey(null);
-      setMessage("");
-      return;
-    }
-
+    setConfirmOpen(false);
     setBusy(true);
     setMessage("");
 
@@ -40,6 +43,16 @@ function LicenseCard({
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleToggleReveal() {
+    if (busy) return;
+    if (key !== null) {
+      setKey(null);
+      setMessage("");
+      return;
+    }
+    setConfirmOpen(true);
   }
 
   async function copy() {
@@ -76,7 +89,7 @@ function LicenseCard({
         <button
           className="btn"
           disabled={busy}
-          onClick={() => void reveal()}
+          onClick={handleToggleReveal}
         >
           {busy ? "Đang tải..." : key ? "Ẩn Key" : "Hiện Key"}
         </button>
@@ -96,6 +109,50 @@ function LicenseCard({
         Nếu Key gặp vấn đề, hãy lưu mã đơn hàng
         để liên hệ hỗ trợ.
       </p>
+
+      <dialog
+        ref={confirmDialog}
+        className="help-dialog"
+        onCancel={() => setConfirmOpen(false)}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setConfirmOpen(false);
+        }}
+      >
+        <div className="dialog-content kinguin-order">
+          <button
+            type="button"
+            className="dialog-close"
+            aria-label="Đóng"
+            onClick={() => setConfirmOpen(false)}
+          >
+            ×
+          </button>
+          <h2>Xác nhận hiển thị License Key</h2>
+          <p>
+            Bạn sắp hiển thị key cho <strong>{name}</strong> (Đơn{" "}
+            <code>{item.orderId.slice(0, 8)}</code>).
+          </p>
+          <p className="muted">
+            Chính sách hoàn tiền: Sau khi hiển thị key, giao dịch được xem là đã bàn giao mã kích hoạt. Key lỗi sẽ được hỗ trợ kiểm tra/đổi key mới hoặc hoàn tiền nếu kho hết key thay thế.
+          </p>
+          <div className="supplier-dialog-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setConfirmOpen(false)}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void doReveal()}
+            >
+              Tôi hiểu, hiện Key
+            </button>
+          </div>
+        </div>
+      </dialog>
     </div>
   );
 }
@@ -214,7 +271,12 @@ export function MyLicensesPage() {
       )}
 
       {items && (
-        <p>Tổng License: {items.length}</p>
+        <>
+          <p>Tổng License: {items.length}</p>
+          <p className="muted" style={{ marginBottom: 14 }}>
+            Chính sách hoàn tiền: Hệ thống tự động hoàn tiền nếu đơn hết key khi cấp phát. Với key đã giao, vui lòng mở yêu cầu hỗ trợ kèm mã đơn nếu gặp lỗi kích hoạt để được đổi key hoặc hoàn tiền theo quy định.
+          </p>
+        </>
       )}
 
       <div

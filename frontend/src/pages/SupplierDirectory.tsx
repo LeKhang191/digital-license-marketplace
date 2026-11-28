@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink } from "react-router-dom";
 import { listSuppliers, saveSupplier, listSupplierBatches, type Supplier, type SupplierInput, type ImportBatch } from "../api/licenses";
 import type { Product } from "../api/types";
@@ -22,6 +22,21 @@ export function SupplierDirectory({products, refreshVersion = 0}: {products: Pro
   const [batches,setBatches] = useState<ImportBatch[]>([]);
   const [detailLoading,setDetailLoading] = useState(false);
   const [detailError,setDetailError] = useState("");
+  const [savedNotice,setSavedNotice] = useState<{mode:"create"|"edit";name:string;isActive:boolean;id?:string}|null>(null);
+  const formDialog = useRef<HTMLDialogElement>(null);
+  const savedDialog = useRef<HTMLDialogElement>(null);
+  useEffect(()=>{
+    const d = formDialog.current;
+    if(!d) return;
+    if(editing!==null && !d.open) d.showModal();
+    else if(editing===null && d.open) d.close();
+  },[editing]);
+  useEffect(()=>{
+    const d = savedDialog.current;
+    if(!d) return;
+    if(savedNotice && !d.open) d.showModal();
+    else if(!savedNotice && d.open) d.close();
+  },[savedNotice]);
   useEffect(() => {
     let live=true; setLoading(true); setError("");
     listSuppliers().then(v=>{if(live)setRows(v);}).catch(e=>{if(live)setError(message(e));}).finally(()=>{if(live)setLoading(false);});
@@ -42,7 +57,15 @@ export function SupplierDirectory({products, refreshVersion = 0}: {products: Pro
   async function submit(e:FormEvent) {
     e.preventDefault(); if(busy || !editing)return;
     setBusy(true); setFormError("");
-    try {await saveSupplier({...form,name:form.name.trim(),website:form.website?.trim()||null,email:form.email?.trim()||null,phone:form.phone?.trim()||null,notes:form.notes?.trim()||null},editing==="new"?undefined:editing);setEditing(null);refresh(v=>v+1);}
+    const mode = editing === "new" ? "create" : "edit";
+    const trimmedName = form.name.trim();
+    const active = form.isActive;
+    try {
+      const saved = await saveSupplier({...form,name:trimmedName,website:form.website?.trim()||null,email:form.email?.trim()||null,phone:form.phone?.trim()||null,notes:form.notes?.trim()||null},editing==="new"?undefined:editing);
+      setEditing(null);
+      refresh(v=>v+1);
+      setSavedNotice({mode,name:trimmedName,isActive:active,id:saved?.id});
+    }
     catch(e){setFormError(message(e));}finally{setBusy(false);}
   }
   return <>
@@ -64,20 +87,37 @@ export function SupplierDirectory({products, refreshVersion = 0}: {products: Pro
         <div className="supplier-actions"><button type="button" className="btn btn-secondary" onClick={()=>setSelected(s.id)}>Chi tiết</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={()=>edit(s)}>Chỉnh sửa</button>{s.isActive && <NavLink className="btn" to={`/licenses/import?supplier=${encodeURIComponent(s.id)}`}>Nhập kho</NavLink>}</div>
       </article>)}</div>
     </section>
-    {editing!==null && <form className="card admin-form license-form" onSubmit={submit}>
-      <div className="supplier-heading"><h2>{editing==="new"?"Thêm nhà cung cấp":"Chỉnh sửa nhà cung cấp"}</h2><button type="button" disabled={busy} onClick={()=>setEditing(null)}>Đóng</button></div>
-      <fieldset disabled={busy}><div className="license-form">
-        <label>Tên nhà cung cấp *<input required maxLength={160} value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))}/></label>
-        <label>Website<input type="url" maxLength={500} value={form.website??""} onChange={e=>setForm(v=>({...v,website:e.target.value}))}/></label>
-        <label>Email<input type="email" maxLength={255} value={form.email??""} onChange={e=>setForm(v=>({...v,email:e.target.value}))}/></label>
-        <label>Điện thoại<input maxLength={80} value={form.phone??""} onChange={e=>setForm(v=>({...v,phone:e.target.value}))}/></label>
-        <label>Ghi chú<textarea maxLength={2000} value={form.notes??""} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
-        <label className="license-test-toggle"><input type="checkbox" checked={form.isActive} onChange={e=>setForm(v=>({...v,isActive:e.target.checked}))}/> Đang hoạt động</label>
-        <p className="muted">Bỏ chọn để ngừng nhập hàng; lịch sử vẫn được giữ.</p>
-        {formError && <p role="alert">{formError}</p>}
-        <button type="submit" disabled={!form.name.trim() || busy}>{busy?"Đang lưu...":"Lưu nhà cung cấp"}</button>
-      </div></fieldset>
-    </form>}
+    <dialog ref={formDialog} className="help-dialog supplier-dialog" onCancel={e=>{if(busy){e.preventDefault();return;}setEditing(null);}} onClick={e=>{if(e.target===e.currentTarget && !busy)setEditing(null);}}>
+      {editing!==null && <form className="dialog-content" onSubmit={submit}>
+        <button type="button" className="dialog-close" aria-label="Đóng" disabled={busy} onClick={()=>setEditing(null)}>×</button>
+        <h2>{editing==="new"?"Thêm nhà cung cấp":"Chỉnh sửa nhà cung cấp"}</h2>
+        <fieldset disabled={busy}><div className="license-form">
+          <label>Tên nhà cung cấp *<input required maxLength={160} value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))}/></label>
+          <label>Website<input type="url" maxLength={500} value={form.website??""} onChange={e=>setForm(v=>({...v,website:e.target.value}))}/></label>
+          <label>Email<input type="email" maxLength={255} value={form.email??""} onChange={e=>setForm(v=>({...v,email:e.target.value}))}/></label>
+          <label>Điện thoại<input maxLength={80} value={form.phone??""} onChange={e=>setForm(v=>({...v,phone:e.target.value}))}/></label>
+          <label>Ghi chú<textarea maxLength={2000} value={form.notes??""} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
+          <label className="license-test-toggle"><input type="checkbox" checked={form.isActive} onChange={e=>setForm(v=>({...v,isActive:e.target.checked}))}/> Đang hoạt động</label>
+          <p className="muted">Bỏ chọn để ngừng nhập hàng; lịch sử vẫn được giữ.</p>
+          {formError && <p role="alert">{formError}</p>}
+          <div className="supplier-dialog-actions">
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={()=>setEditing(null)}>Hủy</button>
+            <button type="submit" className="btn" disabled={!form.name.trim() || busy}>{busy?"Đang lưu...":"Lưu nhà cung cấp"}</button>
+          </div>
+        </div></fieldset>
+      </form>}
+    </dialog>
+    <dialog ref={savedDialog} className="help-dialog" onCancel={()=>setSavedNotice(null)} onClick={e=>{if(e.target===e.currentTarget)setSavedNotice(null);}}>
+      {savedNotice && <div className="dialog-content kinguin-order">
+        <button type="button" className="dialog-close" aria-label="Đóng" onClick={()=>setSavedNotice(null)}>×</button>
+        <h2>{savedNotice.mode==="create"?"Thêm nhà cung cấp thành công":"Cập nhật nhà cung cấp thành công"}</h2>
+        <p style={{textAlign:"center"}}><strong>{savedNotice.name}</strong> · {savedNotice.isActive?"Đang hoạt động":"Ngừng hoạt động"}</p>
+        <div className="supplier-dialog-actions" style={{justifyContent:"center"}}>
+          {savedNotice.isActive && savedNotice.id && <NavLink className="btn" to={`/licenses/import?supplier=${encodeURIComponent(savedNotice.id)}`} onClick={()=>setSavedNotice(null)}>Nhập kho từ nguồn này</NavLink>}
+          <button type="button" className="btn btn-secondary" onClick={()=>setSavedNotice(null)}>Đóng</button>
+        </div>
+      </div>}
+    </dialog>
     {detail && <section className="card admin-table-container">
       <div className="supplier-heading"><h2>{detail.name} — chi tiết</h2><button type="button" onClick={()=>setSelected("")}>Đóng</button></div>
       <p>Website: {detail.website||"—"} · Email: {detail.email||"—"} · Điện thoại: {detail.phone||"—"}</p><p>{detail.notes}</p>

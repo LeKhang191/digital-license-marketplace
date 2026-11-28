@@ -1,13 +1,14 @@
 import { inventoryRows, stockLevel, stockValuation } from "./inventoryMetrics";
 import { InventoryReplacementHistory } from "./InventoryReplacementHistory";
 import { vnd } from "../components/format";
+import { ReceiptDialog, type ReceiptData } from "../components/ReceiptDialog";
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { SupplierIntegration } from "./SupplierIntegration";
 import { SupplierDirectory } from "./SupplierDirectory";
 import { previewLicenseFile, downloadLicenseTemplate } from "./licenseFilePreview";
-import { NavLink, useSearchParams } from "react-router-dom";
+import { NavLink, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
 import { listProducts } from "../api/products";
@@ -36,17 +37,24 @@ import type {
   ImportLicensesResponse,
 } from "../api/types";
 
-export function LicensePage({ view = "inventory" }: { view?: "inventory" | "import" | "supplier" }) {
+export function LicensePage({ view = "inventory" }: { view?: "inventory" | "import" | "supplier" | "history" }) {
   const isInventory = view === "inventory";
   const isImport = view === "import";
   const isSupplier = view === "supplier";
+  const isHistory = view === "history";
+  const navigate = useNavigate();
   const [params] = useSearchParams();
+  const initialHistoryTab = params.get("tab");
+  const [historyTab, setHistoryTab] = useState<"batches" | "kinguin" | "replacements">(
+    initialHistoryTab === "kinguin" || initialHistoryTab === "replacements" ? initialHistoryTab : "batches"
+  );
+  const [batchReceipt, setBatchReceipt] = useState<ReceiptData | null>(null);
   const [sourceId, setSourceId] = useState(() => params.get("supplier") ?? "");
   const [sources, setSources] = useState<Supplier[]>([]);
   const [sourcesError, setSourcesError] = useState("");
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [showKinguin, setShowKinguin] = useState(true);
-  const [kinguinTab, setKinguinTab] = useState<"purchase" | "history" | "settings">("purchase");
+  const [kinguinTab, setKinguinTab] = useState<"purchase" | "settings">("purchase");
   const [integrationBusy, setIntegrationBusy] = useState(false);
   const [sourceRef, setSourceRef] = useState("");
   const [unitCost, setUnitCost] = useState("");
@@ -108,7 +116,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     pollAttempts.current = 0;
     setMockRequest(null); setMockResult(null); setMockError("");
     setSupplierRefresh(v => v + 1);
-    if (history) setKinguinTab("history");
+    if (history) navigate("/licenses/history?tab=kinguin");
   }
 
   async function submitMockOrder() {
@@ -139,19 +147,22 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
 
 
   useEffect(() => {
-    setSupplierQuote(null);
     setSupplierError("");
-    setSupplierLoading(false);
-    if (!isSupplier || !ready || !isLicenseCoordinator || !productId || !showKinguin || kinguinTab !== "purchase" || integrationBusy) return;
+    if (!isSupplier || !ready || !isLicenseCoordinator || !productId || !showKinguin || kinguinTab !== "purchase" || integrationBusy) {
+      setSupplierLoading(false);
+      return;
+    }
     const controller = new AbortController();
     setSupplierLoading(true);
-    getKinguinQuote(productId, supplierQuantity, controller.signal)
-      .then((data) => { if (!controller.signal.aborted) setSupplierQuote(data); })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) setSupplierError(error instanceof Error ? error.message : "Không thể tra cứu Kinguin");
-      })
-      .finally(() => { if (!controller.signal.aborted) setSupplierLoading(false); });
-    return () => controller.abort();
+    const timer = window.setTimeout(() => {
+      getKinguinQuote(productId, supplierQuantity, controller.signal)
+        .then((data) => { if (!controller.signal.aborted) setSupplierQuote(data); })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) setSupplierError(error instanceof Error ? error.message : "Không thể tra cứu Kinguin");
+        })
+        .finally(() => { if (!controller.signal.aborted) setSupplierLoading(false); });
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [isSupplier, ready, isLicenseCoordinator, productId, supplierQuantity, supplierRefresh, showKinguin, kinguinTab, integrationBusy]);
 
   const [mode, setMode] = useState<"manual" | "file">("manual");
@@ -205,13 +216,17 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
 
   const [refreshVersion, setRefreshVersion] = useState(0);
   useEffect(() => {
-    if (!ready || !isLicenseCoordinator || !isImport) return;
+    const t = params.get("tab");
+    if (isHistory && (t === "batches" || t === "kinguin" || t === "replacements")) setHistoryTab(t);
+  }, [isHistory, params]);
+  useEffect(() => {
+    if (!ready || !isLicenseCoordinator || !isHistory) return;
     let active = true;
     setBatchError("");
     listImportBatches().then(items => { if (active) setBatches(items); })
       .catch(e => { if (active) setBatchError(e instanceof Error ? e.message : "Không tải được lịch sử"); });
     return () => { active = false; };
-  }, [ready, isLicenseCoordinator, isImport, refreshVersion]);
+  }, [ready, isLicenseCoordinator, isHistory, refreshVersion]);
 
   useEffect(() => {
     if (!ready || !isLicenseCoordinator) return;
@@ -519,16 +534,17 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
 
   return (
     <div className="container license-workspace">
-      <h1>{isInventory ? "Quản lý kho License" : isImport ? "Nhập kho License" : "Quản lý nhà cung cấp"}</h1>
+      <h1>{isInventory ? "Quản lý kho License" : isImport ? "Nhập kho License" : isHistory ? "Lịch sử kho & nhập hàng" : "Quản lý nhà cung cấp"}</h1>
 
       <p className="muted">
-        {isInventory ? "Theo dõi tồn kho và trạng thái license." : isImport ? "Nhập key cho sản phẩm đang mở bán trong Catalog." : "Quản lý nguồn nhập hàng và các kết nối API đã tích hợp."}
+        {isInventory ? "Theo dõi tồn kho và trạng thái license." : isImport ? "Nhập key cho sản phẩm đang mở bán trong Catalog." : isHistory ? "Theo dõi các lô nhập kho, đơn API nhà cung cấp và lịch sử đổi key." : "Quản lý nguồn nhập hàng và các kết nối API đã tích hợp."}
       </p>
 
       <nav className="license-nav" aria-label="Quản lý license">
         <NavLink end to="/licenses">Xem kho</NavLink>
         <NavLink to="/licenses/import">Nhập kho</NavLink>
         <NavLink to="/licenses/suppliers">Nhà cung cấp</NavLink>
+        <NavLink to="/licenses/history">Lịch sử</NavLink>
       </nav>
 
       {isInventory && <div className="grid admin-summary license-summary">
@@ -761,31 +777,27 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
         </div>
       )}
 
-      {isImport && <section className="card admin-table-container">
-        <h2>Lịch sử nhập kho</h2>
-        <p className="muted">200 lô gần nhất; giá vốn chỉ tính trên số key nhập thành công. Không hiển thị key.</p>
-        <label>Lọc nguồn hàng<input value={batchFilter} onChange={e => setBatchFilter(e.target.value)} placeholder="Tên nhà cung cấp" /></label>
-        {batchError && <p role="alert">{batchError}</p>}
-        <div style={{overflowX: "auto"}}><table className="admin-table"><thead><tr><th>Thời gian / mã lô</th><th>Nguồn hàng</th><th>Sản phẩm</th><th>Phương thức</th><th>Nhập / trùng / lỗi</th><th>Giá vốn (VND)</th></tr></thead><tbody>
-          {batches.filter(b => b.supplierName.toLowerCase().includes(batchFilter.trim().toLowerCase())).map(b => <tr key={b.id}>
-            <td>{new Date(b.createdAtUtc).toLocaleString("vi-VN")}<br />{b.reference || b.id.slice(0,8)}</td><td>{b.supplierName}</td><td>{productName(b.productId)}</td><td>{b.method}</td><td>{b.imported} / {b.duplicates} / {b.invalid}</td><td>{b.unitCostVnd == null ? "Chưa khai báo" : (b.unitCostVnd * b.imported).toLocaleString("vi-VN")}</td>
-          </tr>)}
-        </tbody></table></div>
-        {!batches.length && !batchError && <p className="muted">Chưa có lô nhập được ghi nhận.</p>}
-      </section>}
+      {isImport && (
+        <p style={{ marginTop: 12 }}>
+          <NavLink className="btn btn-secondary" to="/licenses/history">Xem toàn bộ lịch sử nhập kho →</NavLink>
+        </p>
+      )}
 
       {isSupplier && <SupplierDirectory products={products} refreshVersion={refreshVersion} />}
       {isSupplier && <section className="card admin-form">
         <h2>Kết nối API — Kinguin</h2>
         <p className="muted">Tích hợp Kinguin · Giao dịch Mock không sử dụng tiền thật.</p>
-        <button type="button" className="btn btn-secondary" disabled={integrationBusy || mockBusy || !!mockRequest} onClick={() => setShowKinguin(v => !v)}>{showKinguin ? "Ẩn công cụ Kinguin" : "Mở công cụ Kinguin"}</button>
+        <div className="supplier-actions">
+          <button type="button" className="btn btn-secondary" disabled={integrationBusy || mockBusy || !!mockRequest} onClick={() => setShowKinguin(v => !v)}>{showKinguin ? "Ẩn công cụ Kinguin" : "Mở công cụ Kinguin"}</button>
+          <NavLink className="btn btn-secondary" to="/licenses/history?tab=kinguin">Xem lịch sử đơn API →</NavLink>
+        </div>
       </section>}
       {isSupplier && showKinguin && <section className="card admin-form license-form kinguin-panel">
         <header className="kinguin-heading"><h2>Kinguin</h2><span className="kinguin-tag">{supplierQuote?.mode ?? "Tích hợp nhà cung cấp"}</span></header>
         <nav className="kinguin-tabs" aria-label="Công cụ Kinguin">
-          {([ ["purchase", "Mua license"], ["history", "Lịch sử"], ["settings", "Cài đặt"] ] as const).map(([id, label]) => <button key={id} type="button" className={`btn ${kinguinTab === id ? "" : "btn-secondary"}`} aria-pressed={kinguinTab === id} disabled={integrationBusy || mockBusy || (!!mockRequest && id === "settings")} onClick={() => { setSupplierQuote(null); setKinguinTab(id); }}>{label}</button>)}
+          {([ ["purchase", "Mua license"], ["settings", "Cài đặt"] ] as const).map(([id, label]) => <button key={id} type="button" className={`btn ${kinguinTab === id ? "" : "btn-secondary"}`} aria-pressed={kinguinTab === id} disabled={integrationBusy || mockBusy || (!!mockRequest && id === "settings")} onClick={() => { setSupplierQuote(null); setKinguinTab(id); }}>{label}</button>)}
         </nav>
-        {kinguinTab !== "history" && <div className="kinguin-selector">
+        <div className="kinguin-selector">
             {loading && <p role="status">Đang tải sản phẩm...</p>}
             <label>Tìm sản phẩm trong Catalog
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên game hoặc slug" disabled={!!mockRequest || mockBusy || integrationBusy} />
@@ -798,7 +810,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
               </select>
             </label>
             <label className="license-test-toggle"><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} disabled={!!mockRequest || mockBusy || integrationBusy} /> Hiện sản phẩm kiểm thử</label>
-        </div>}
+        </div>
         <SupplierIntegration products={products} product={productId} locked={!!mockRequest || mockBusy}
           tab={kinguinTab} orderVersion={supplierRefresh} onBusy={setIntegrationBusy} onMappingSaved={() => setSupplierRefresh(v => v + 1)} />
         {kinguinTab === "purchase" && productId && <div className="kinguin-purchase">
@@ -809,25 +821,31 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
               {supplierQuote?.quote && <p className="kinguin-ok">Đã tìm thấy sản phẩm nhà cung cấp</p>}
             </div>
           </div>}
-          {supplierLoading && <p role="status">Đang lấy báo giá…</p>}
+          {supplierLoading && !supplierQuote && <p role="status">Đang lấy báo giá…</p>}
           {supplierError && <div role="alert"><p>{supplierError.includes("KINGUIN_MAPPING_NOT_FOUND") ? "Sản phẩm chưa được liên kết với Kinguin." : supplierError}</p>
             <button className="btn btn-secondary" type="button" disabled={!!mockRequest || mockBusy || integrationBusy} onClick={() => setKinguinTab("settings")}>Cài đặt liên kết</button></div>}
-          {supplierQuote && <>
+          {supplierQuote && <div className={supplierLoading ? "kinguin-stale" : undefined}>
             <p className="muted">{supplierQuote.mode === "Mock" ? "Mock · Giá và tồn kho mô phỏng, không dùng tiền thật." : "Sandbox · Chỉ tra cứu, chưa hỗ trợ mua."}</p>
             {supplierQuote.quote ? <div className="kinguin-metrics">
               <div><span className="muted">Giá nhập mỗi key</span><strong>{supplierQuote.quote.price.toFixed(2)} {supplierQuote.currency}</strong></div>
               <div><span className="muted">Tồn kho nhà cung cấp</span><strong>{supplierQuote.quote.textQty} key</strong></div>
             </div> : <p>Không tìm thấy sản phẩm nhà cung cấp.</p>}
-          </>}
-          <div className="kinguin-quantity"><strong>Số lượng nhập</strong><div>
-            <button type="button" className="btn btn-secondary" aria-label="Giảm số lượng" disabled={supplierQuantity <= 1 || !!mockRequest || mockBusy || integrationBusy} onClick={() => { setSupplierQuote(null); setSupplierQuantity(n => n - 1); }}>−</button>
-            <span>{supplierQuantity}</span>
-            <button type="button" className="btn btn-secondary" aria-label="Tăng số lượng" disabled={supplierQuantity >= 10 || !!mockRequest || mockBusy || integrationBusy} onClick={() => { setSupplierQuote(null); setSupplierQuantity(n => n + 1); }}>+</button>
-          </div></div>
-          {supplierQuote?.quote && <div className="kinguin-total"><span className="muted">Tổng chi phí {supplierQuote.mode === "Mock" ? "mô phỏng" : "ước tính"}</span><strong>{supplierQuote.estimatedCost == null ? "—" : `${supplierQuote.estimatedCost.toFixed(2)} ${supplierQuote.currency}`}</strong>
-            {!supplierQuote.canFulfill && <p role="status">Không đủ tồn kho cho số lượng đã chọn.</p>}
           </div>}
-          <button type="button" className="btn btn-secondary kinguin-refresh" disabled={supplierLoading || mockBusy || !!mockRequest || integrationBusy} onClick={() => { setSupplierQuote(null); setSupplierRefresh(v => v + 1); }}>Làm mới báo giá</button>
+          <div className="kinguin-quantity"><strong>Số lượng nhập</strong><div>
+            <button type="button" className="btn btn-secondary" aria-label="Giảm số lượng" disabled={supplierQuantity <= 1 || !!mockRequest || mockBusy || integrationBusy} onClick={() => setSupplierQuantity(n => n - 1)}>−</button>
+            <span className="kinguin-qty-value">{supplierQuantity}</span>
+            <button type="button" className="btn btn-secondary" aria-label="Tăng số lượng" disabled={supplierQuantity >= 10 || !!mockRequest || mockBusy || integrationBusy} onClick={() => setSupplierQuantity(n => n + 1)}>+</button>
+          </div></div>
+          {supplierQuote?.quote && (() => {
+            const estCost = supplierQuote.quote.price * supplierQuantity;
+            const canFulfillQty = supplierQuote.quote.textQty >= supplierQuantity;
+            return <div className={`kinguin-total${supplierLoading ? " kinguin-stale" : ""}`}>
+              <span className="muted">Tổng chi phí {supplierQuote.mode === "Mock" ? "mô phỏng" : "ước tính"}{supplierLoading ? " · Đang cập nhật..." : ""}</span>
+              <strong>{`${estCost.toFixed(2)} ${supplierQuote.currency}`}</strong>
+              {!canFulfillQty && <p role="status">Không đủ tồn kho cho số lượng đã chọn.</p>}
+            </div>;
+          })()}
+          <button type="button" className="btn btn-secondary kinguin-refresh" disabled={supplierLoading || mockBusy || !!mockRequest || integrationBusy} onClick={() => setSupplierRefresh(v => v + 1)}>Làm mới báo giá</button>
                 {(supplierQuote?.mode === "Mock" || mockRequest) && (
                   <div className="kinguin-order" aria-live="polite">
                     <p className="muted">{supplierQuote?.demoAutoImport ? "Nhập kho demo tự động · Không dùng tiền thật · Key không thể kích hoạt." : "Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật."}</p>
@@ -850,22 +868,82 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
                         <p className="muted">Không dùng tiền thật. Key DEMO không thể kích hoạt game.</p>
                         <button type="button" className="btn" onClick={() => finishMockOrder()}>Tiếp tục mua hàng</button>
                         <button type="button" className="btn btn-secondary" onClick={() => finishMockOrder(true)}>Xem lịch sử đơn mua</button>
-                        {!!mockResult.imported && <><NavLink className="btn btn-secondary" to="/licenses" onClick={() => finishMockOrder()}>Xem kho License</NavLink><NavLink className="btn btn-secondary" to="/licenses/import" onClick={() => finishMockOrder()}>Xem lịch sử nhập kho</NavLink></>}
+                        {!!mockResult.imported && <><NavLink className="btn btn-secondary" to="/licenses" onClick={() => finishMockOrder()}>Xem kho License</NavLink><NavLink className="btn btn-secondary" to="/licenses/history" onClick={() => finishMockOrder()}>Xem lịch sử nhập kho</NavLink></>}
                       </div>}
                     </dialog>
-        {kinguinTab === "history" && <section className="card">
-          <h3>Tra cứu lại đơn mô phỏng</h3>
-          <label>Request ID<input value={lookupId} onChange={e => { setLookupId(e.target.value); setLookupResult(null); setLookupError(""); }} disabled={lookupBusy} placeholder="UUID của đơn mô phỏng" /></label>
-          <button type="button" className="btn btn-secondary" disabled={lookupBusy || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lookupId.trim())} onClick={async () => {
-            setLookupBusy(true); setLookupResult(null); setLookupError("");
-            try { setLookupResult(await getKinguinMockOrder(lookupId.trim())); setSupplierRefresh(v => v + 1); }
-            catch (e) { setLookupError(e instanceof Error ? e.message : "Không tìm thấy đơn mô phỏng"); }
-            finally { setLookupBusy(false); }
-          }}>{lookupBusy ? "Đang tải..." : "Kiểm tra trạng thái"}</button>
-          {lookupError && <p role="alert">{lookupError}</p>}
-          {lookupResult && <p role="status">{lookupResult.status} · Đã nhập {lookupResult.imported ?? 0}/{lookupResult.quantity} key · {lookupResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
-        </section>}
       </section>}
+
+      {isHistory && <>
+        <div className="history-tabs" role="tablist" aria-label="Phân loại lịch sử">
+          {([["batches", "Lịch sử nhập kho"], ["kinguin", "Đơn API Kinguin"], ["replacements", "Lịch sử đổi key"]] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={historyTab === id} className={`btn ${historyTab === id ? "" : "btn-secondary"}`} onClick={() => setHistoryTab(id)}>{label}</button>
+          ))}
+        </div>
+
+        {historyTab === "batches" && <section className="card admin-table-container">
+          <h2>Lịch sử nhập kho</h2>
+          <p className="muted">200 lô gần nhất (thủ công, CSV/TXT và Auto Import); giá vốn chỉ tính trên số key nhập thành công. Không hiển thị key.</p>
+          <label>Lọc nguồn hàng<input value={batchFilter} onChange={e => setBatchFilter(e.target.value)} placeholder="Tên nhà cung cấp" /></label>
+          {batchError && <p role="alert">{batchError}</p>}
+          <div style={{overflowX: "auto"}}><table className="admin-table"><thead><tr><th>Thời gian / mã lô</th><th>Nguồn hàng</th><th>Sản phẩm</th><th>Phương thức</th><th>Nhập / trùng / lỗi</th><th>Giá vốn (VND)</th><th>Chứng từ</th></tr></thead><tbody>
+            {batches.filter(b => b.supplierName.toLowerCase().includes(batchFilter.trim().toLowerCase())).map(b => <tr key={b.id}>
+              <td>{new Date(b.createdAtUtc).toLocaleString("vi-VN")}<br />{b.reference || b.id.slice(0,8)}</td><td>{b.supplierName}</td><td>{productName(b.productId)}</td><td>{b.method}</td><td>{b.imported} / {b.duplicates} / {b.invalid}</td><td>{b.unitCostVnd == null ? "Chưa khai báo" : vnd(b.unitCostVnd * b.imported)}</td>
+              <td><button type="button" className="btn btn-secondary" onClick={() => setBatchReceipt({
+                title: "Phiếu nhập kho",
+                subtitle: "Chứng từ ghi nhận lô nhập License Key nội bộ",
+                code: b.reference || b.id.slice(0, 8),
+                dateText: new Date(b.createdAtUtc).toLocaleString("vi-VN"),
+                statusText: b.imported > 0 ? "Đã nhập kho" : "Không có key hợp lệ",
+                lines: [
+                  { label: "Mã lô hệ thống", value: b.id },
+                  { label: "Nguồn hàng", value: b.supplierName },
+                  { label: "Sản phẩm", value: productName(b.productId) },
+                  { label: "Phương thức", value: b.method },
+                  { label: "Số lượng nhập / trùng / lỗi", value: `${b.imported} / ${b.duplicates} / ${b.invalid}` },
+                  { label: "Đơn giá vốn", value: b.unitCostVnd == null ? "Chưa khai báo" : vnd(b.unitCostVnd) },
+                ],
+                totalLabel: "Tổng giá vốn lô hàng",
+                totalValue: b.unitCostVnd == null ? "Chưa khai báo" : vnd(b.unitCostVnd * b.imported),
+                note: "Phiếu nhập kho nội bộ; không chứa plaintext license key.",
+              })}>Xem phiếu</button></td>
+            </tr>)}
+          </tbody></table></div>
+          {!batches.length && !batchError && <p className="muted">Chưa có lô nhập được ghi nhận.</p>}
+        </section>}
+
+        {historyTab === "kinguin" && <>
+          <section className="card admin-form license-form">
+            <SupplierIntegration products={products} product={productId} locked={false}
+              tab="history" orderVersion={supplierRefresh} onBusy={setIntegrationBusy} onMappingSaved={() => setSupplierRefresh(v => v + 1)} />
+          </section>
+          <section className="card admin-form license-form">
+            <h3>Tra cứu lại đơn mô phỏng</h3>
+            <label>Request ID<input value={lookupId} onChange={e => { setLookupId(e.target.value); setLookupResult(null); setLookupError(""); }} disabled={lookupBusy} placeholder="UUID của đơn mô phỏng" /></label>
+            <button type="button" className="btn btn-secondary" disabled={lookupBusy || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lookupId.trim())} onClick={async () => {
+              setLookupBusy(true); setLookupResult(null); setLookupError("");
+              try { setLookupResult(await getKinguinMockOrder(lookupId.trim())); setSupplierRefresh(v => v + 1); }
+              catch (e) { setLookupError(e instanceof Error ? e.message : "Không tìm thấy đơn mô phỏng"); }
+              finally { setLookupBusy(false); }
+            }}>{lookupBusy ? "Đang tải..." : "Kiểm tra trạng thái"}</button>
+            {lookupError && <p role="alert">{lookupError}</p>}
+            {lookupResult && <p role="status">{lookupResult.status} · Đã nhập {lookupResult.imported ?? 0}/{lookupResult.quantity} key · {lookupResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
+          </section>
+        </>}
+
+        {historyTab === "replacements" && <>
+          <section className="card admin-form license-form">
+            <label>Chọn sản phẩm để xem lịch sử đổi key
+              <select value={productId} onChange={e => changeProduct(e.target.value)}>
+                <option value="">Chọn sản phẩm</option>
+                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          </section>
+          {productId ? <InventoryReplacementHistory key={productId} productId={productId} refreshVersion={refreshVersion} /> : <section className="card"><p className="muted">Chọn một sản phẩm để xem lịch sử đổi key.</p></section>}
+        </>}
+
+        <ReceiptDialog receipt={batchReceipt} onClose={() => setBatchReceipt(null)} />
+      </>}
 
       {isInventory && <>
       <section className="card">
@@ -1108,7 +1186,6 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
           </>
         )}
       </div>
-      {productId && <InventoryReplacementHistory key={productId} productId={productId} refreshVersion={refreshVersion} />}
       </>}
     </div>
   );

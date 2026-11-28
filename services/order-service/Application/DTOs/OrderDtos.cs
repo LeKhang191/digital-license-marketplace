@@ -3,13 +3,18 @@ using OrderService.Domain.Entities;
 
 namespace OrderService.Application.DTOs;
 
+public sealed record CreateOrderItemRequest(
+    [Required] Guid ProductId,
+    [Range(1, 10)] int Quantity = 1);
+
 public sealed class CreateOrderRequest
 {
-    [Required]
     public Guid ProductId { get; set; }
 
     [Range(1, 10)]
     public int Quantity { get; set; } = 1;
+
+    public IReadOnlyList<CreateOrderItemRequest>? Items { get; set; }
 
     public string PaymentMethod { get; set; } = "VNPAY";
 }

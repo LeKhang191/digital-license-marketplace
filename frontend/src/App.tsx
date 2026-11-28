@@ -2,6 +2,7 @@ import { MyLicensesPage } from "./pages/MyLicensesPage";
 
 import { Route, Routes } from "react-router-dom";
 
+import { CartProvider } from "./cart/CartContext";
 import { Navbar } from "./components/Navbar";
 
 import { RoleGuard } from "./auth/RoleGuard";
@@ -9,6 +10,9 @@ import { Roles } from "./auth/roles";
 
 import { HomePage } from "./pages/HomePage";
 import { ProductPage } from "./pages/ProductPage";
+import { CartPage } from "./pages/CartPage";
+import { CheckoutPage } from "./pages/CheckoutPage";
+import { AccountPage } from "./pages/AccountPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { PaymentResultPage } from "./pages/PaymentResultPage";
 import { AdminPage } from "./pages/AdminPage";
@@ -19,7 +23,7 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 
 export default function App() {
   return (
-    <>
+    <CartProvider>
       <Navbar />
 
       <Routes>
@@ -34,6 +38,10 @@ export default function App() {
           path="/products/:id"
           element={<ProductPage />}
         />
+
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/account" element={<AccountPage />} />
 
         {/* Customer routes */}
 
@@ -93,6 +101,7 @@ export default function App() {
 
         <Route path="/licenses/import" element={<RoleGuard allowedRoles={[Roles.LICENSE_COORDINATOR]}><LicensePage key="import" view="import" /></RoleGuard>} />
         <Route path="/licenses/suppliers" element={<RoleGuard allowedRoles={[Roles.LICENSE_COORDINATOR]}><LicensePage key="supplier" view="supplier" /></RoleGuard>} />
+        <Route path="/licenses/history" element={<RoleGuard allowedRoles={[Roles.LICENSE_COORDINATOR]}><LicensePage key="history" view="history" /></RoleGuard>} />
 
         {/* Transaction Auditor routes */}
 
@@ -119,6 +128,6 @@ export default function App() {
           element={<NotFoundPage />}
         />
       </Routes>
-    </>
+    </CartProvider>
   );
 }

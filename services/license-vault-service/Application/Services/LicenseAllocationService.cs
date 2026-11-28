@@ -10,7 +10,7 @@ namespace LicenseVault.Api.Application.Services;
 
 public sealed class LicenseAllocationService(
     LicenseDbContext db,
-    ILogger<LicenseAllocationService> log
+    ILogger<LicenseAllocationService> log, IConfiguration config
 ) 
 {
     private static readonly JsonSerializerOptions Json =
@@ -23,6 +23,7 @@ public sealed class LicenseAllocationService(
         Validate(message);
 
         var fingerprint = GetFingerprint(message);
+        var allowDemo = config["Kinguin:Mode"] == "Mock" && config.GetValue<bool>("Kinguin:DemoAutoImport");
 
         await using var transaction =
             await db.Database.BeginTransactionAsync(ct);
@@ -90,6 +91,7 @@ public sealed class LicenseAllocationService(
                     FROM license_keys
                     WHERE "ProductId" = {productId}
                       AND "Status" = {LicenseStatus.Available}
+                      AND ({allowDemo} OR NOT EXISTS (SELECT 1 FROM license_import_batches b WHERE b."Id" = license_keys."ImportBatchId" AND b."Method" = 'MOCK_API'))
                     ORDER BY "CreatedAtUtc", "Id"
                     LIMIT {quantity}
                     FOR UPDATE

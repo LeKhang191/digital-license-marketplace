@@ -10,7 +10,7 @@ namespace LicenseVault.Api.Controllers;
 [Route("api/licenses/availability")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AvailabilityController(
-    LicenseDbContext db
+    LicenseDbContext db, IConfiguration config
 ) : ControllerBase
 {
     [AllowAnonymous]
@@ -25,11 +25,12 @@ public sealed class AvailabilityController(
                 error = "Invalid product ID."
             });
 
+        var allowDemo = config["Kinguin:Mode"] == "Mock" && config.GetValue<bool>("Kinguin:DemoAutoImport");
         var available = await db.LicenseKeys
             .AsNoTracking()
             .CountAsync(k =>
                 k.ProductId == productId &&
-                k.Status == LicenseStatus.Available,
+                k.Status == LicenseStatus.Available && (allowDemo || !db.Set<LicenseImportBatch>().Any(b => b.Id == k.ImportBatchId && b.Method == "MOCK_API")),
                 ct);
 
         return Ok(new

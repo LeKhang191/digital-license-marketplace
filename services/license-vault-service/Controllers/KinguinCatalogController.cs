@@ -11,7 +11,7 @@ namespace LicenseVault.Api.Controllers;
 [Route("api/licenses/supplier/kinguin")]
 [Authorize(Policy = "LicenseCoordinatorOnly")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class KinguinCatalogController(KinguinCatalog supplier, ICatalogClient catalog, LicenseDbContext db) : ControllerBase
+public sealed class KinguinCatalogController(ILicenseSupplier supplier, ICatalogClient catalog, LicenseDbContext db) : ControllerBase
 {
     [HttpGet("{productId:guid}")]
     public async Task<IActionResult> Get(Guid productId, CancellationToken ct, [FromQuery] int quantity = 1)
@@ -22,7 +22,7 @@ public sealed class KinguinCatalogController(KinguinCatalog supplier, ICatalogCl
             return BadRequest(new { error = "INVALID_QUANTITY" });
         try
         {
-            var mapping = supplier.Mapping(productId);
+            var mapping = await supplier.MappingAsync(productId, ct);
             if (string.IsNullOrWhiteSpace(mapping))
                 return NotFound(new { error = "KINGUIN_MAPPING_NOT_FOUND" });
             if (!await catalog.ProductExistsAsync(productId, ct))
@@ -40,10 +40,10 @@ public sealed class KinguinCatalogController(KinguinCatalog supplier, ICatalogCl
                 quantity, canFulfill = quote is not null && quote.TextQty >= quantity,
                 estimatedCost = quote is not null && quote.TextQty >= quantity
                     ? (decimal?)(quote.Price * quantity) : null,
-                previewOnly = true });
+                previewOnly = true, demoAutoImport = supplier is KinguinCatalog k && k.DemoAutoImport });
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException
-            or InvalidDataException or InvalidOperationException ||
+            or InvalidDataException or InvalidOperationException or System.Security.Cryptography.CryptographicException or FormatException ||
             (ex is OperationCanceledException && !ct.IsCancellationRequested))
         {
             return StatusCode(503, new { error = "KINGUIN_UNAVAILABLE" });

@@ -558,3 +558,27 @@ input,select {background:#18191b;color:var(--color-text);border-color:var(--colo
 .supplier-card{min-width:0;overflow-wrap:anywhere}
 .supplier-actions{justify-content:flex-start}
 @media(max-width:720px){.supplier-filters,.supplier-cards{grid-template-columns:minmax(0,1fr)}}
+
+/* Kinguin workspace */
+.kinguin-panel { max-width: 100%; min-width: 0; }
+.kinguin-heading,.kinguin-quantity { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.kinguin-heading h2,.kinguin-product h3 { margin:0; }
+.kinguin-tag { font-size:12px; border:1px solid #ffffff30; border-radius:999px; padding:5px 10px; }
+.kinguin-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.kinguin-tabs .btn { padding:10px 8px; }
+.kinguin-selector { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:end; }
+.kinguin-selector .license-test-toggle { grid-column:1/-1; }
+.kinguin-purchase,.kinguin-integration,.kinguin-order { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.kinguin-product { display:flex; align-items:center; gap:16px; padding:14px; border:1px solid #ffffff20; border-radius:12px; }
+.kinguin-product img { width:84px; height:112px; object-fit:cover; border-radius:8px; flex-shrink:0; }
+.kinguin-product p { margin-top:5px; }
+.kinguin-ok { color:#86efac; }
+.kinguin-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.kinguin-metrics > div,.kinguin-total { display:flex; flex-direction:column; gap:6px; background:#ffffff07; border:1px solid #ffffff20; padding:16px; border-radius:12px; }
+.kinguin-metrics strong,.kinguin-total strong { font-size:clamp(18px,3vw,27px); overflow-wrap:anywhere; }
+.kinguin-quantity > div { display:flex; align-items:center; gap:16px; }
+.kinguin-quantity .btn { min-width:40px; padding:8px 12px; }
+.kinguin-refresh { align-self:flex-end; }
+.kinguin-integration .btn { align-self:flex-start; }
+.kinguin-integration h2,.kinguin-integration h3 { margin:0; }
+@media(max-width:600px) { .kinguin-selector { grid-template-columns:1fr; } .kinguin-tabs .btn { font-size:12px; } .kinguin-metrics > div { padding:10px; } .kinguin-product img { width:64px; height:85px; } }

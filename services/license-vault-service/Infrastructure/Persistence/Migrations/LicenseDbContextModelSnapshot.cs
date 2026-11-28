@@ -93,6 +93,25 @@ namespace LicenseVault.Api.Infrastructure.Persistence.Migrations
                     b.ToTable("allocation_results", (string)null);
                 });
 
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.SupplierApiConfiguration", b =>
+                {
+                    b.Property<string>("Provider").HasMaxLength(32).HasColumnType("character varying(32)");
+                    b.Property<string>("EncryptedApiKey").IsRequired().HasColumnType("text");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.HasKey("Provider");
+                    b.ToTable("supplier_api_configurations", (string)null);
+                });
+
+            modelBuilder.Entity("LicenseVault.Api.Domain.Entities.SupplierProductMapping", b =>
+                {
+                    b.Property<string>("Provider").HasMaxLength(32).HasColumnType("character varying(32)");
+                    b.Property<string>("Mode").HasMaxLength(16).HasColumnType("character varying(16)");
+                    b.Property<Guid>("ProductId").HasColumnType("uuid");
+                    b.Property<string>("SupplierProductId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
+                    b.HasKey("Provider", "Mode", "ProductId");
+                    b.ToTable("supplier_product_mappings", (string)null);
+                });
+
             modelBuilder.Entity("LicenseVault.Api.Domain.Entities.Supplier", b =>
                 {
                     b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");

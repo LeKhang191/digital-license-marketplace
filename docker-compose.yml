@@ -127,6 +127,7 @@ services:
       ConnectionStrings__LicenseDb: "Host=postgres;Port=5432;Database=license_db;Username=app;Password=${DB_PASSWORD}"
       Services__CatalogUrl: "http://catalog:8080"
       Kinguin__Mode: "${KINGUIN_MODE:-Disabled}"
+      Kinguin__DemoAutoImport: "${KINGUIN_DEMO_AUTO_IMPORT:-false}"
       Kinguin__ApiKey: "${KINGUIN_SANDBOX_API_KEY:-}"
       Kinguin__LocalProductId: "${KINGUIN_LOCAL_PRODUCT_ID:-}"
       Kinguin__ProductId: "${KINGUIN_PRODUCT_ID:-}"

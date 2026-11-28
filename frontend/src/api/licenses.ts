@@ -109,6 +109,7 @@ export interface KinguinQuote {
   canFulfill: boolean;
   estimatedCost: number | null;
   previewOnly: boolean;
+  demoAutoImport?: boolean;
 }
 
 export function getKinguinQuote(productId: string, quantity: number, signal?: AbortSignal) {
@@ -123,7 +124,8 @@ export interface KinguinMockOrder {
   productId: string;
   quantity: number;
   totalCost: number;
-  status: "MOCK_PENDING" | "MOCK_FULFILLED" | "MOCK_OUT_OF_STOCK";
+  status: "MOCK_PENDING" | "MOCK_FULFILLED" | "MOCK_OUT_OF_STOCK" | "MOCK_IMPORT_BLOCKED";
+  imported?: number;
   simulated: boolean;
   charged: boolean;
 }

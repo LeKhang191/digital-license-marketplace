@@ -136,6 +136,19 @@ public sealed class LicenseDbContext(
         });
 
 
+        var apiConfig = modelBuilder.Entity<SupplierApiConfiguration>();
+        apiConfig.ToTable("supplier_api_configurations");
+        apiConfig.HasKey(x => x.Provider);
+        apiConfig.Property(x => x.Provider).HasMaxLength(32);
+        apiConfig.Property(x => x.EncryptedApiKey).IsRequired();
+
+        var mapping = modelBuilder.Entity<SupplierProductMapping>();
+        mapping.ToTable("supplier_product_mappings");
+        mapping.HasKey(x => new { x.Provider, x.Mode, x.ProductId });
+        mapping.Property(x => x.Provider).HasMaxLength(32);
+        mapping.Property(x => x.Mode).HasMaxLength(16);
+        mapping.Property(x => x.SupplierProductId).HasMaxLength(128).IsRequired();
+
         var supplier = modelBuilder.Entity<Supplier>();
         supplier.ToTable("suppliers");
         supplier.HasKey(x => x.Id);

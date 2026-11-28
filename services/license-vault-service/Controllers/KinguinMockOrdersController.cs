@@ -43,14 +43,14 @@ public sealed class KinguinMockOrdersController(
             if (prior.ProductId != request.ProductId || prior.Quantity != request.Quantity)
                 return Conflict(new { error = "MOCK_REQUEST_CONFLICT" });
             await transaction.CommitAsync(ct);
-            return prior.Status == "MOCK_PENDING" ? StatusCode(202, Result(prior, true)) : Ok(Result(prior, true));
+            return prior.Status is "MOCK_PENDING" or "MOCK_IMPORT_PENDING" ? StatusCode(202, Result(prior, true)) : Ok(Result(prior, true));
         }
 
         string? mapping;
-        KinguinProduct? quote;
+        SupplierQuote? quote;
         try
         {
-            mapping = supplier.Mapping(request.ProductId);
+            mapping = await supplier.MappingAsync(request.ProductId, ct);
             if (string.IsNullOrWhiteSpace(mapping)) return NotFound(new { error = "KINGUIN_MAPPING_NOT_FOUND" });
             if (!await catalog.ProductExistsAsync(request.ProductId, ct)) return NotFound(new { error = "PRODUCT_NOT_FOUND" });
             quote = await supplier.GetAsync(mapping, ct);
@@ -62,6 +62,7 @@ public sealed class KinguinMockOrdersController(
         }
         if (quote is null) return NotFound(new { error = "MOCK_PRODUCT_NOT_FOUND" });
 
+        if (supplier.DemoAutoImport && !queued) return BadRequest(new { error = "DEMO_IMPORT_REQUIRES_ASYNC" });
         if (queued)
         {
             var pending = new KinguinMockOrder
@@ -69,7 +70,7 @@ public sealed class KinguinMockOrdersController(
                 Id = request.RequestId, OwnerId = owner, ProductId = request.ProductId,
                 SupplierProductId = mapping, Quantity = request.Quantity, TotalCost = 0,
                 EncryptedKeys = "[]", CreatedAtUtc = DateTime.UtcNow,
-                Status = "MOCK_PENDING", NextPublishAtUtc = DateTime.UtcNow
+                Status = supplier.DemoAutoImport ? "MOCK_IMPORT_PENDING" : "MOCK_PENDING", NextPublishAtUtc = DateTime.UtcNow
             };
             db.KinguinMockOrders.Add(pending);
             await db.SaveChangesAsync(ct);
@@ -120,6 +121,8 @@ public sealed class KinguinMockOrdersController(
         var order = await db.KinguinMockOrders.AsNoTracking().SingleOrDefaultAsync(
             x => x.Id == requestId && x.OwnerId == owner && x.Status == "MOCK_FULFILLED", ct);
         if (order is null) return NotFound();
+        // Imported demo keys must follow the normal customer reveal path.
+        if (await db.Set<LicenseImportBatch>().AnyAsync(b => b.Id == requestId && b.Method == "MOCK_API", ct)) return NotFound();
         var keys = JsonSerializer.Deserialize<string[]>(order.EncryptedKeys) ?? [];
         return Ok(new { requestId, simulated = true, keys = keys.Select(encryption.Decrypt).ToArray() });
     }
@@ -127,10 +130,11 @@ public sealed class KinguinMockOrdersController(
     private Task LockAsync(string key, CancellationToken ct) =>
         db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
 
-    private static object Result(KinguinMockOrder order, bool replayed) => new
+    private object Result(KinguinMockOrder order, bool replayed) => new
     {
         requestId = order.Id, order.ProductId, order.SupplierProductId, order.Quantity,
-        order.TotalCost, currency = "EUR", status = order.Status, replayed,
+        order.TotalCost, currency = "EUR", status = order.Status == "MOCK_IMPORT_PENDING" ? "MOCK_PENDING" : order.Status, replayed,
+        imported = order.Status == "MOCK_FULFILLED" && db.Set<LicenseImportBatch>().Any(b => b.Id == order.Id && b.Method == "MOCK_API") ? order.Quantity : 0,
         simulated = true, charged = false, order.CreatedAtUtc
     };
 }

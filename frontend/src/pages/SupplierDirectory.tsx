@@ -7,7 +7,7 @@ const blank: SupplierInput = {name:"",website:null,email:null,phone:null,notes:n
 const money = (n:number) => n.toLocaleString("vi-VN") + " đ";
 const message = (e:unknown) => e instanceof Error ? e.message : "Không thể thực hiện yêu cầu.";
 
-export function SupplierDirectory({products}: {products: Product[]}) {
+export function SupplierDirectory({products, refreshVersion = 0}: {products: Product[]; refreshVersion?: number}) {
   const [rows,setRows] = useState<Supplier[]>([]);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState("");
@@ -26,14 +26,14 @@ export function SupplierDirectory({products}: {products: Product[]}) {
     let live=true; setLoading(true); setError("");
     listSuppliers().then(v=>{if(live)setRows(v);}).catch(e=>{if(live)setError(message(e));}).finally(()=>{if(live)setLoading(false);});
     return ()=>{live=false;};
-  },[version]);
+  },[version,refreshVersion]);
   useEffect(()=>{
     setBatches([]); setDetailError(""); setDetailLoading(!!selected);
     if(!selected)return;
     let live=true;
     listSupplierBatches(selected).then(v=>{if(live)setBatches(v);}).catch(e=>{if(live)setDetailError(message(e));}).finally(()=>{if(live)setDetailLoading(false);});
     return ()=>{live=false;};
-  },[selected,version]);
+  },[selected,version,refreshVersion]);
   const detail=rows.find(s=>s.id===selected);
   const filtered=rows.filter(s=>s.name.toLowerCase().includes(search.trim().toLowerCase()) && (filter==="all" || s.isActive===(filter==="active")));
   function edit(s?:Supplier) {

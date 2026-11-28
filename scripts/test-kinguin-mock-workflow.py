@@ -52,6 +52,7 @@ def wait_result(rid, token):
 
 def main():
     if env('Kinguin__Mode') != 'Mock': raise SystemExit('STOP: Mock mode required')
+    if env('Kinguin__DemoAutoImport').lower() == 'true': raise SystemExit('STOP: This legacy fixture test requires isolated Mock (auto-import disabled). Use test-kinguin-auto-import.py instead.')
     products = {env('Kinguin__ProductId'):env('Kinguin__LocalProductId')}
     for entry in env('Kinguin__ProductMappings').split(';'):
         if entry.strip():

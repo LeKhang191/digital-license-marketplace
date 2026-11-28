@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LicenseVault.Api.Application.Interfaces;
+using LicenseVault.Api.Domain.Entities;
 using LicenseVault.Api.Infrastructure.Kinguin;
 using LicenseVault.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +39,7 @@ public sealed class KinguinMockWorkflowWorker(
                 var db = scope.ServiceProvider.GetRequiredService<LicenseDbContext>();
                 var now = DateTime.UtcNow;
                 var ids = await db.KinguinMockOrders.AsNoTracking()
-                    .Where(x => x.Status == "MOCK_PENDING" && x.NextPublishAtUtc <= now)
+                    .Where(x => (x.Status == "MOCK_PENDING" || x.Status == "MOCK_IMPORT_PENDING") && x.NextPublishAtUtc <= now)
                     .OrderBy(x => x.NextPublishAtUtc).ThenBy(x => x.Id).Select(x => x.Id).Take(20).ToListAsync(ct);
                 foreach (var id in ids)
                 {
@@ -46,7 +47,7 @@ public sealed class KinguinMockWorkflowWorker(
                     timeout.CancelAfter(TimeSpan.FromSeconds(10));
                     await publisher.PublishAsync(Route, new MockPayment(id), timeout.Token);
                     var next = DateTime.UtcNow.AddSeconds(30);
-                    await db.KinguinMockOrders.Where(x => x.Id == id && x.Status == "MOCK_PENDING")
+                    await db.KinguinMockOrders.Where(x => x.Id == id && (x.Status == "MOCK_PENDING" || x.Status == "MOCK_IMPORT_PENDING"))
                         .ExecuteUpdateAsync(s => s.SetProperty(x => x.NextPublishAtUtc, (DateTime?)next), ct);
                 }
             }
@@ -113,7 +114,16 @@ public sealed class KinguinMockWorkflowWorker(
         var requestLock = $"kinguin-mock-request:{id:N}";
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({requestLock}, 0))", ct);
         var order = await db.KinguinMockOrders.SingleOrDefaultAsync(x => x.Id == id, ct);
-        if (order is null || order.Status != "MOCK_PENDING") return;
+        if (order is null || (order.Status != "MOCK_PENDING" && order.Status != "MOCK_IMPORT_PENDING")) return;
+        var import = order.Status == "MOCK_IMPORT_PENDING";
+        if (import && (!supplier.DemoAutoImport || order.SupplierProductId != await supplier.SuggestedMockIdAsync(order.ProductId, ct)))
+        {
+            order.Status = "MOCK_IMPORT_BLOCKED";
+            order.NextPublishAtUtc = null;
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return;
+        }
         var quote = await supplier.GetAsync(order.SupplierProductId, ct);
         var stockLock = $"kinguin-mock-stock:{order.SupplierProductId}";
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({stockLock}, 0))", ct);
@@ -124,8 +134,41 @@ public sealed class KinguinMockWorkflowWorker(
         else
         {
             var encryption = scope.ServiceProvider.GetRequiredService<ILicenseEncryption>();
-            order.EncryptedKeys = JsonSerializer.Serialize(Enumerable.Range(1, order.Quantity)
-                .Select(i => encryption.Encrypt($"DEMO-NOT-REDEEMABLE-{order.Id:N}-{i}")).ToArray());
+            var keys = Enumerable.Range(1, order.Quantity)
+                .Select(i => $"DEMO-NOT-REDEEMABLE-{order.Id:N}-{i}").ToArray();
+            if (import)
+            {
+                // Same transaction and request lock as fulfillment; no separate import commit.
+                // Stable batch ID makes request replay traceable without another schema change.
+                const string name = "Kinguin Mock (DEMO)";
+                const string normalized = "kinguin mock (demo)";
+                var now = DateTime.UtcNow;
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO suppliers ("Id", "Name", "NormalizedName", "IsActive", "CreatedAtUtc", "UpdatedAtUtc")
+                    VALUES ({Guid.NewGuid()}, {name}, {normalized}, {true}, {now}, {now})
+                    ON CONFLICT ("NormalizedName") DO NOTHING
+                    """, ct);
+                var sources = await db.Set<Supplier>().FromSqlInterpolated($"SELECT * FROM suppliers WHERE \"NormalizedName\" = {normalized} FOR UPDATE").ToListAsync(ct);
+                var source = sources.Single();
+                if (!source.IsActive)
+                {
+                    order.Status = "MOCK_IMPORT_BLOCKED";
+                    order.NextPublishAtUtc = null;
+                    await db.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
+                    return;
+                }
+                var batch = new LicenseImportBatch { Id = order.Id, ProductId = order.ProductId,
+                    SupplierId = source.Id, SupplierName = source.Name, Reference = order.Id.ToString(),
+                    UnitCostVnd = quote.Price * 30000m, Method = "MOCK_API", ImportedBy = order.OwnerId,
+                    CreatedAtUtc = now, Total = keys.Length, Imported = keys.Length };
+                db.Add(batch);
+                foreach (var key in keys)
+                    db.LicenseKeys.Add(new LicenseKey { ProductId = order.ProductId, ImportBatchId = batch.Id,
+                        EncryptedKey = encryption.Encrypt(key), KeyFingerprint = encryption.Fingerprint(key),
+                        Status = LicenseStatus.Available, CreatedAtUtc = now });
+            }
+            order.EncryptedKeys = import ? "[]" : JsonSerializer.Serialize(keys.Select(encryption.Encrypt).ToArray());
             order.TotalCost = quote.Price * order.Quantity;
             order.Status = "MOCK_FULFILLED";
         }

@@ -9,7 +9,7 @@ namespace LicenseVault.Api.Application.Services;
 
 public sealed class LicenseService(
     LicenseDbContext db,
-    ILicenseEncryption encryption
+    ILicenseEncryption encryption, IConfiguration config
 ) : ILicenseService
 {
     public async Task<ImportLicensesResponse> ImportAsync(
@@ -122,8 +122,10 @@ public sealed class LicenseService(
         IReadOnlyList<LicenseInventoryResponse>>
         GetInventoryAsync(CancellationToken ct)
     {
+        var allowDemo = config["Kinguin:Mode"] == "Mock" && config.GetValue<bool>("Kinguin:DemoAutoImport");
         return await db.LicenseKeys
             .AsNoTracking()
+            .Where(k => allowDemo || !db.Set<LicenseImportBatch>().Any(b => b.Id == k.ImportBatchId && b.Method == "MOCK_API"))
             .GroupBy(x => x.ProductId)
             .Select(g => new LicenseInventoryResponse(
                 g.Key,

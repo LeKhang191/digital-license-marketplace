@@ -16,7 +16,7 @@ namespace LicenseVault.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class LicenseReplacementController(
     LicenseDbContext db,
-    IHttpClientFactory clients
+    IHttpClientFactory clients, IConfiguration config
 ) : ControllerBase
 {
     private sealed record OrderItem(
@@ -250,6 +250,7 @@ public sealed class LicenseReplacementController(
                 "License does not match the order item.");
         }
 
+        var allowDemo = config["Kinguin:Mode"] == "Mock" && config.GetValue<bool>("Kinguin:DemoAutoImport");
         // Find a replacement for the exact same product.
         var available = await db.LicenseKeys
             .FromSqlInterpolated(
@@ -258,6 +259,7 @@ public sealed class LicenseReplacementController(
                 FROM license_keys
                 WHERE "ProductId" = {productId}
                   AND "Status" = {LicenseStatus.Available}
+                  AND ({allowDemo} OR NOT EXISTS (SELECT 1 FROM license_import_batches b WHERE b."Id" = license_keys."ImportBatchId" AND b."Method" = 'MOCK_API'))
                   AND "OrderId" IS NULL
                   AND "OrderItemId" IS NULL
                   AND "CustomerId" IS NULL

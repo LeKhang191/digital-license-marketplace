@@ -46,6 +46,8 @@ builder.Services.AddHttpClient<KinguinCatalog>(client =>
     AllowAutoRedirect = false
 });
 
+builder.Services.AddScoped<ILicenseSupplier>(sp => sp.GetRequiredService<KinguinCatalog>());
+
 // Customer order verification
 builder.Services.AddHttpClient("LicenseOrders", client =>
 {

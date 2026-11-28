@@ -1,6 +1,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { SupplierIntegration } from "./SupplierIntegration";
 import { SupplierDirectory } from "./SupplierDirectory";
 import { previewLicenseFile, downloadLicenseTemplate } from "./licenseFilePreview";
 import { NavLink, useSearchParams } from "react-router-dom";
@@ -41,7 +42,9 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
   const [sources, setSources] = useState<Supplier[]>([]);
   const [sourcesError, setSourcesError] = useState("");
   const [sourcesLoading, setSourcesLoading] = useState(true);
-  const [showKinguin, setShowKinguin] = useState(false);
+  const [showKinguin, setShowKinguin] = useState(true);
+  const [kinguinTab, setKinguinTab] = useState<"purchase" | "history" | "settings">("purchase");
+  const [integrationBusy, setIntegrationBusy] = useState(false);
   const [sourceRef, setSourceRef] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [batches, setBatches] = useState<ImportBatch[]>([]);
@@ -80,9 +83,31 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
   const [mockResult, setMockResult] = useState<KinguinMockOrder | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
   const [mockError, setMockError] = useState("");
+  const mockDialog = useRef<HTMLDialogElement>(null);
+  const pollAttempts = useRef(0);
+  const terminal = !!mockResult && mockResult.status !== "MOCK_PENDING";
+  useEffect(() => {
+    if (!isSupplier || !terminal) return;
+    if (!mockDialog.current?.open) mockDialog.current?.showModal();
+    setRefreshVersion(v => v + 1);
+    setSupplierRefresh(v => v + 1);
+  }, [isSupplier, terminal]);
+  useEffect(() => {
+    if (!isSupplier || !mockRequest || mockBusy || mockError || mockResult?.status !== "MOCK_PENDING") return;
+    if (pollAttempts.current >= 30) { setMockError("Đơn vẫn đang xử lý. Kiểm tra lại trạng thái, không tạo đơn mới."); return; }
+    const timer = window.setTimeout(() => { pollAttempts.current++; void refreshMockOrder(); }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [isSupplier, mockRequest, mockBusy, mockResult, mockError]);
+  function finishMockOrder(history = false) {
+    mockDialog.current?.close();
+    pollAttempts.current = 0;
+    setMockRequest(null); setMockResult(null); setMockError("");
+    setSupplierRefresh(v => v + 1);
+    if (history) setKinguinTab("history");
+  }
 
   async function submitMockOrder() {
-    if (mockBusy || !isSupplier || (!mockRequest && (supplierLoading || supplierQuote?.mode !== "Mock" || !supplierQuote.canFulfill))) return;
+    if (integrationBusy || mockBusy || !isSupplier || (!mockRequest && (supplierLoading || supplierQuote?.mode !== "Mock" || !supplierQuote.canFulfill))) return;
     const request = mockRequest ?? { id: crypto.randomUUID(), product: productId, quantity: supplierQuantity };
     setMockRequest(request);
     setMockBusy(true);
@@ -112,7 +137,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
     setSupplierQuote(null);
     setSupplierError("");
     setSupplierLoading(false);
-    if (!isSupplier || !ready || !isLicenseCoordinator || !productId || supplierRefresh === 0) return;
+    if (!isSupplier || !ready || !isLicenseCoordinator || !productId || !showKinguin || kinguinTab !== "purchase" || integrationBusy) return;
     const controller = new AbortController();
     setSupplierLoading(true);
     getKinguinQuote(productId, supplierQuantity, controller.signal)
@@ -122,7 +147,7 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
       })
       .finally(() => { if (!controller.signal.aborted) setSupplierLoading(false); });
     return () => controller.abort();
-  }, [isSupplier, ready, isLicenseCoordinator, productId, supplierQuantity, supplierRefresh]);
+  }, [isSupplier, ready, isLicenseCoordinator, productId, supplierQuantity, supplierRefresh, showKinguin, kinguinTab, integrationBusy]);
 
   const [mode, setMode] = useState<"manual" | "file">("manual");
 
@@ -310,9 +335,8 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
   }
 
   function changeProduct(id: string) {
-    if (mockRequest || mockBusy) return;
+    if (mockRequest || mockBusy || integrationBusy) return;
     setSupplierQuote(null);
-    setSupplierRefresh(0);
     setProductId(id);
     setRawKeys("");
     setFile(null);
@@ -554,16 +578,16 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
             <label>Mã lô / chứng từ (không bắt buộc)<input maxLength={120} value={sourceRef} onChange={e => setSourceRef(e.target.value)} /></label>
             <label>Giá nhập một key (VND, không bắt buộc)<input type="number" min="0" max="1000000000000" step="0.01" value={unitCost} onChange={e => setUnitCost(e.target.value)} /></label>
             <label>Tìm sản phẩm trong Catalog
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên game hoặc slug" disabled={!!mockRequest || mockBusy} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên game hoặc slug" disabled={!!mockRequest || mockBusy || integrationBusy} />
             </label>
             <label>Sản phẩm đang mở bán
-              <select required value={productId} onChange={e => changeProduct(e.target.value)} disabled={loading || !!mockRequest || mockBusy}>
+              <select required value={productId} onChange={e => changeProduct(e.target.value)} disabled={loading || !!mockRequest || mockBusy || integrationBusy}>
                 <option value="">Chọn sản phẩm</option>
                 {selectedProduct && !filteredProducts.some(p => p.id === productId) && <option value={productId}>{selectedProduct.name}</option>}
                 {filteredProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-            <label className="license-test-toggle"><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} disabled={!!mockRequest || mockBusy} /> Hiện sản phẩm kiểm thử (theo tên/slug)</label>
+            <label className="license-test-toggle"><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} disabled={!!mockRequest || mockBusy || integrationBusy} /> Hiện sản phẩm kiểm thử (theo tên/slug)</label>
             <p className="muted">Nguồn: Catalog Service · {filteredProducts.length} sản phẩm phù hợp.</p>
             {selectedProduct && <p className="muted">Tồn kho nội bộ: {selectedInventory?.available ?? 0} key khả dụng.</p>}
             {!selectedProduct && productId && (
@@ -737,85 +761,97 @@ export function LicensePage({ view = "inventory" }: { view?: "inventory" | "impo
         {!batches.length && !batchError && <p className="muted">Chưa có lô nhập được ghi nhận.</p>}
       </section>}
 
-      {isSupplier && <SupplierDirectory products={products} />}
+      {isSupplier && <SupplierDirectory products={products} refreshVersion={refreshVersion} />}
       {isSupplier && <section className="card admin-form">
         <h2>Kết nối API — Kinguin</h2>
-        <p className="muted">Tích hợp riêng đã cấu hình. Mock chỉ mô phỏng; chưa hỗ trợ nhập key thật.</p>
-        <button type="button" className="btn btn-secondary" onClick={() => setShowKinguin(v => !v)}>{showKinguin ? "Ẩn công cụ Kinguin" : "Mở công cụ Kinguin"}</button>
+        <p className="muted">Tích hợp Kinguin · Giao dịch Mock không sử dụng tiền thật.</p>
+        <button type="button" className="btn btn-secondary" disabled={integrationBusy || mockBusy || !!mockRequest} onClick={() => setShowKinguin(v => !v)}>{showKinguin ? "Ẩn công cụ Kinguin" : "Mở công cụ Kinguin"}</button>
       </section>}
-      {isSupplier && showKinguin && <section className="card admin-form license-form">
+      {isSupplier && showKinguin && <section className="card admin-form license-form kinguin-panel">
+        <header className="kinguin-heading"><h2>Kinguin</h2><span className="kinguin-tag">{supplierQuote?.mode ?? "Tích hợp nhà cung cấp"}</span></header>
+        <nav className="kinguin-tabs" aria-label="Công cụ Kinguin">
+          {([ ["purchase", "Mua license"], ["history", "Lịch sử"], ["settings", "Cài đặt"] ] as const).map(([id, label]) => <button key={id} type="button" className={`btn ${kinguinTab === id ? "" : "btn-secondary"}`} aria-pressed={kinguinTab === id} disabled={integrationBusy || mockBusy || (!!mockRequest && id === "settings")} onClick={() => { setSupplierQuote(null); setKinguinTab(id); }}>{label}</button>)}
+        </nav>
+        {kinguinTab !== "history" && <div className="kinguin-selector">
             {loading && <p role="status">Đang tải sản phẩm...</p>}
             <label>Tìm sản phẩm trong Catalog
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên game hoặc slug" disabled={!!mockRequest || mockBusy} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên game hoặc slug" disabled={!!mockRequest || mockBusy || integrationBusy} />
             </label>
             <label>Sản phẩm đang mở bán
-              <select required value={productId} onChange={e => changeProduct(e.target.value)} disabled={loading || !!mockRequest || mockBusy}>
+              <select required value={productId} onChange={e => changeProduct(e.target.value)} disabled={loading || !!mockRequest || mockBusy || integrationBusy}>
                 <option value="">Chọn sản phẩm</option>
                 {selectedProduct && !filteredProducts.some(p => p.id === productId) && <option value={productId}>{selectedProduct.name}</option>}
                 {filteredProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-            <label className="license-test-toggle"><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} disabled={!!mockRequest || mockBusy} /> Hiện sản phẩm kiểm thử (theo tên/slug)</label>
-            <p className="muted">Nguồn: Catalog Service · {filteredProducts.length} sản phẩm phù hợp.</p>
-            {selectedProduct && <p className="muted">Tồn kho nội bộ: {selectedInventory?.available ?? 0} key khả dụng.</p>}
-            {productId && (
-              <section className="card">
-                <h3>Kinguin — tra cứu nhà cung cấp</h3>
-                <p className="muted">Đối chiếu UUID sản phẩm DLM với Supplier Product ID đã cấu hình. Mock chỉ tạo dữ liệu thử nghiệm, không mua key thật.</p>
-                <label>Số lượng
-                  <select value={supplierQuantity} disabled={!!mockRequest || mockBusy} onChange={(e) => { setSupplierQuote(null); setSupplierRefresh(0); setSupplierQuantity(Number(e.target.value)); }}>
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </label>
-                <button type="button" disabled={supplierLoading || mockBusy || !!mockRequest} onClick={() => setSupplierRefresh((v) => v + 1)}>
-                  {supplierLoading ? "Đang tra cứu..." : "Tra cứu giá và tồn kho Kinguin"}
-                </button>
-                {supplierError && <p role="status">{supplierError}</p>}
+            <label className="license-test-toggle"><input type="checkbox" checked={showTestProducts} onChange={e => setShowTestProducts(e.target.checked)} disabled={!!mockRequest || mockBusy || integrationBusy} /> Hiện sản phẩm kiểm thử</label>
+        </div>}
+        <SupplierIntegration products={products} product={productId} locked={!!mockRequest || mockBusy}
+          tab={kinguinTab} orderVersion={supplierRefresh} onBusy={setIntegrationBusy} onMappingSaved={() => setSupplierRefresh(v => v + 1)} />
+        {kinguinTab === "purchase" && productId && <div className="kinguin-purchase">
+          {selectedProduct && <div className="kinguin-product">
+            {(selectedProduct.steam?.posterImage || selectedProduct.steam?.headerImage) && <img src={selectedProduct.steam?.posterImage || selectedProduct.steam?.headerImage} alt="" loading="lazy" />}
+            <div><h3>{selectedProduct.name}</h3><p className="muted">{selectedProduct.steam?.appId ? "Steam · PC" : selectedProduct.category}</p>
+              <p>Tồn kho nội bộ: {selectedInventory?.available ?? 0} key</p>
+              {supplierQuote?.quote && <p className="kinguin-ok">Đã tìm thấy sản phẩm nhà cung cấp</p>}
+            </div>
+          </div>}
+          {supplierLoading && <p role="status">Đang lấy báo giá…</p>}
+          {supplierError && <div role="alert"><p>{supplierError.includes("KINGUIN_MAPPING_NOT_FOUND") ? "Sản phẩm chưa được liên kết với Kinguin." : supplierError}</p>
+            <button className="btn btn-secondary" type="button" disabled={!!mockRequest || mockBusy || integrationBusy} onClick={() => setKinguinTab("settings")}>Cài đặt liên kết</button></div>}
+          {supplierQuote && <>
+            <p className="muted">{supplierQuote.mode === "Mock" ? "Mock · Giá và tồn kho mô phỏng, không dùng tiền thật." : "Sandbox · Chỉ tra cứu, chưa hỗ trợ mua."}</p>
+            {supplierQuote.quote ? <div className="kinguin-metrics">
+              <div><span className="muted">Giá nhập mỗi key</span><strong>{supplierQuote.quote.price.toFixed(2)} {supplierQuote.currency}</strong></div>
+              <div><span className="muted">Tồn kho nhà cung cấp</span><strong>{supplierQuote.quote.textQty} key</strong></div>
+            </div> : <p>Không tìm thấy sản phẩm nhà cung cấp.</p>}
+          </>}
+          <div className="kinguin-quantity"><strong>Số lượng nhập</strong><div>
+            <button type="button" className="btn btn-secondary" aria-label="Giảm số lượng" disabled={supplierQuantity <= 1 || !!mockRequest || mockBusy || integrationBusy} onClick={() => { setSupplierQuote(null); setSupplierQuantity(n => n - 1); }}>−</button>
+            <span>{supplierQuantity}</span>
+            <button type="button" className="btn btn-secondary" aria-label="Tăng số lượng" disabled={supplierQuantity >= 10 || !!mockRequest || mockBusy || integrationBusy} onClick={() => { setSupplierQuote(null); setSupplierQuantity(n => n + 1); }}>+</button>
+          </div></div>
+          {supplierQuote?.quote && <div className="kinguin-total"><span className="muted">Tổng chi phí {supplierQuote.mode === "Mock" ? "mô phỏng" : "ước tính"}</span><strong>{supplierQuote.estimatedCost == null ? "—" : `${supplierQuote.estimatedCost.toFixed(2)} ${supplierQuote.currency}`}</strong>
+            {!supplierQuote.canFulfill && <p role="status">Không đủ tồn kho cho số lượng đã chọn.</p>}
+          </div>}
+          <button type="button" className="btn btn-secondary kinguin-refresh" disabled={supplierLoading || mockBusy || !!mockRequest || integrationBusy} onClick={() => { setSupplierQuote(null); setSupplierRefresh(v => v + 1); }}>Làm mới báo giá</button>
                 {(supplierQuote?.mode === "Mock" || mockRequest) && (
-                  <div aria-live="polite">
-                    <p className="muted">Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật.</p>
-                    <button type="button" disabled={mockBusy || !!mockResult || (!mockRequest && (supplierLoading || supplierQuote?.mode !== "Mock" || !supplierQuote.canFulfill))} onClick={submitMockOrder}>
-                      {mockRequest ? "Gửi lại cùng Request ID" : "Tạo đơn mua mô phỏng"}
-                    </button>
-                    {mockRequest && <>
-                      <p>Request ID: <code>{mockRequest.id}</code></p>
-                      <p className="muted">Lưu mã này để tra cứu lại khi chuyển trang.</p>
-                      <button type="button" disabled={mockBusy} onClick={refreshMockOrder}>Kiểm tra trạng thái</button>
-                      <button type="button" disabled={mockBusy || mockResult?.status === "MOCK_PENDING" || !mockResult} onClick={() => { setMockRequest(null); setMockResult(null); setMockError(""); }}>Đơn thử nghiệm mới</button>
+                  <div className="kinguin-order" aria-live="polite">
+                    <p className="muted">{supplierQuote?.demoAutoImport ? "Nhập kho demo tự động · Không dùng tiền thật · Key không thể kích hoạt." : "Đơn thử nghiệm cách ly, thanh toán giả lập, không giao key thật."}</p>
+                    {!mockRequest && <button className="btn" type="button" disabled={integrationBusy || mockBusy || supplierLoading || supplierQuote?.mode !== "Mock" || !supplierQuote.canFulfill} onClick={() => { if (window.confirm(`Xác nhận mua mô phỏng ${supplierQuantity} key ${selectedProduct?.name ?? ""}? Không dùng tiền thật.`)) void submitMockOrder(); }}>Xác nhận mua mô phỏng</button>}
+                    {mockRequest && !terminal && <>
+                      <p role="status">{mockResult?.status === "MOCK_PENDING" ? "Đang xử lý đơn, tự động kiểm tra trạng thái…" : mockBusy ? "Đang gửi đơn…" : "Chưa xác định kết quả đơn."}</p>
+                      {mockError && <><p>Request ID: <code>{mockRequest.id}</code></p><button className="btn btn-secondary" type="button" disabled={mockBusy} onClick={() => { pollAttempts.current = 0; void refreshMockOrder(); }}>Kiểm tra trạng thái</button>{!mockResult && <button className="btn btn-secondary" type="button" disabled={mockBusy} onClick={submitMockOrder}>Gửi lại cùng Request ID</button>}</>}
                     </>}
-                    {mockResult && <p>{mockResult.status} · {mockResult.quantity} key · {mockResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
                     {mockError && <p role="status">{mockError}</p>}
                   </div>
                 )}
 
-                {supplierQuote && (
-                  <div aria-live="polite">
-                    <p><strong>{supplierQuote.mode === "Mock" ? "MOCK — Dữ liệu mô phỏng" : "SANDBOX — Chỉ tra cứu"}</strong></p>
-                    <p>Mã sản phẩm nhà cung cấp: {supplierQuote.supplierProductId}</p>
-                    {supplierQuote.quote ? <>
-                      <p>Giá tham khảo: {supplierQuote.quote.price.toFixed(2)} {supplierQuote.currency}</p>
-                      <p>Text key khả dụng theo báo giá: {supplierQuote.quote.textQty}</p>
-                      <p>{supplierQuote.canFulfill ? "Đủ theo báo giá" : "Không đủ theo báo giá"}</p>
-                      {supplierQuote.estimatedCost !== null && <p>Ước tính: {supplierQuote.estimatedCost.toFixed(2)} {supplierQuote.currency}</p>}
-                    </> : <p>Không tìm thấy sản phẩm nhà cung cấp.</p>}
-                    <p className="muted">Không bảo đảm giá hoặc tồn kho khi mua thực tế.</p>
-                  </div>
-                )}
-              </section>
-            )}
-
-        <section className="card">
+        </div>}
+                    <dialog ref={mockDialog} className="help-dialog" onCancel={e => { e.preventDefault(); finishMockOrder(); }}>
+                      {terminal && mockResult && <div className="dialog-content kinguin-order">
+                        <button type="button" className="dialog-close" aria-label="Đóng" onClick={() => finishMockOrder()}>×</button>
+                        <h2>{mockResult.status === "MOCK_FULFILLED" ? (mockResult.imported ? "Nhập hàng thành công" : "Mua mô phỏng thành công") : mockResult.status === "MOCK_IMPORT_BLOCKED" ? "Nhập kho bị chặn" : "Nhà cung cấp hết hàng"}</h2>
+                        <p>{products.find(p => p.id === mockResult.productId)?.name ?? mockResult.productId} · Kinguin Mock</p>
+                        <div className="kinguin-metrics"><div><span>Đã nhập kho</span><strong>{mockResult.imported ?? 0} key</strong></div><div><span>Chi phí mô phỏng</span><strong>{mockResult.totalCost.toFixed(2)} EUR</strong></div></div>
+                        <p className="muted">Không dùng tiền thật. Key DEMO không thể kích hoạt game.</p>
+                        <button type="button" className="btn" onClick={() => finishMockOrder()}>Tiếp tục mua hàng</button>
+                        <button type="button" className="btn btn-secondary" onClick={() => finishMockOrder(true)}>Xem lịch sử đơn mua</button>
+                        {!!mockResult.imported && <><NavLink className="btn btn-secondary" to="/licenses" onClick={() => finishMockOrder()}>Xem kho License</NavLink><NavLink className="btn btn-secondary" to="/licenses/import" onClick={() => finishMockOrder()}>Xem lịch sử nhập kho</NavLink></>}
+                      </div>}
+                    </dialog>
+        {kinguinTab === "history" && <section className="card">
           <h3>Tra cứu lại đơn mô phỏng</h3>
           <label>Request ID<input value={lookupId} onChange={e => { setLookupId(e.target.value); setLookupResult(null); setLookupError(""); }} disabled={lookupBusy} placeholder="UUID của đơn mô phỏng" /></label>
           <button type="button" className="btn btn-secondary" disabled={lookupBusy || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lookupId.trim())} onClick={async () => {
             setLookupBusy(true); setLookupResult(null); setLookupError("");
-            try { setLookupResult(await getKinguinMockOrder(lookupId.trim())); }
+            try { setLookupResult(await getKinguinMockOrder(lookupId.trim())); setSupplierRefresh(v => v + 1); }
             catch (e) { setLookupError(e instanceof Error ? e.message : "Không tìm thấy đơn mô phỏng"); }
             finally { setLookupBusy(false); }
           }}>{lookupBusy ? "Đang tải..." : "Kiểm tra trạng thái"}</button>
           {lookupError && <p role="alert">{lookupError}</p>}
-          {lookupResult && <p role="status">{lookupResult.status} · {lookupResult.quantity} key · {lookupResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
-        </section>
+          {lookupResult && <p role="status">{lookupResult.status} · Đã nhập {lookupResult.imported ?? 0}/{lookupResult.quantity} key · {lookupResult.totalCost.toFixed(2)} EUR (mô phỏng)</p>}
+        </section>}
       </section>}
 
       {isInventory && <>

@@ -1,0 +1,190 @@
+# Cấu hình Nginx HTTPS trực tiếp trên VPS (không dùng Cloudflare).
+# - ${APP_DOMAIN}: Frontend SPA (frontend/dist) + API (/api/*) + VNPay IPN + Jira Webhook
+# - ${AUTH_DOMAIN}: Keycloak public realm endpoints (chặn /admin và /realms/master từ Internet)
+
+limit_req_zone $binary_remote_addr zone=dlm_vnpay_ipn:2m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=dlm_jira_webhook:2m rate=5r/s;
+limit_req_zone $binary_remote_addr zone=dlm_api:10m rate=30r/s;
+
+# HTTP -> HTTPS redirect (giữ ACME HTTP-01 để certbot renew không cần tắt Nginx)
+server {
+    listen 80;
+    server_name ${APP_DOMAIN} ${AUTH_DOMAIN};
+
+    server_tokens off;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# 1. Frontend Storefront + API Gateway + Public Callbacks (${APP_DOMAIN})
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${APP_DOMAIN};
+
+    server_tokens off;
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    ssl_certificate /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:DLM_SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # VNPay Sandbox/Production IPN (chỉ GET, giữ nguyên query string, không ghi log query chứa hash)
+    location = /api/orders/vnpay-ipn {
+        if ($request_method != GET) {
+            return 405;
+        }
+
+        limit_req zone=dlm_vnpay_ipn burst=20 nodelay;
+        limit_req_status 429;
+        access_log off;
+
+        set $gateway_upstream http://gateway:8080;
+        proxy_pass $gateway_upstream/api/orders/vnpay-ipn$is_args$args;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host gateway;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 15s;
+    }
+
+    # Jira Service Management Automation Webhook (chỉ POST, giới hạn payload, forward secret header)
+    location = /api/support/webhooks/jira {
+        if ($request_method != POST) {
+            return 405;
+        }
+
+        client_max_body_size 16k;
+        client_body_timeout 10s;
+
+        limit_req zone=dlm_jira_webhook burst=10 nodelay;
+        limit_req_status 429;
+        access_log off;
+
+        set $gateway_upstream http://gateway:8080;
+        proxy_pass $gateway_upstream/api/support/webhooks/jira;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host gateway;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-DLM-Webhook-Secret $http_x_dlm_webhook_secret;
+
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 15s;
+    }
+
+    # API chung chuyển vào Ocelot Gateway (hỗ trợ upload CSV/TXT nhập kho tối đa 10MB)
+    location /api/ {
+        limit_req zone=dlm_api burst=60 nodelay;
+        limit_req_status 429;
+        client_max_body_size 10m;
+
+        set $gateway_upstream http://gateway:8080;
+        proxy_pass $gateway_upstream;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 30s;
+    }
+
+    # Static assets sinh ra bởi Vite build
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location ^~ /assets/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # SPA fallback cho React Router
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+# 2. Keycloak Public Auth Endpoints (${AUTH_DOMAIN})
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${AUTH_DOMAIN};
+
+    server_tokens off;
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    ssl_certificate /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:DLM_SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Không bao giờ mở Keycloak Admin Console hoặc master realm ra Internet.
+    # Quản trị Keycloak chỉ thực hiện nội bộ qua SSH tunnel (127.0.0.1:8081) hoặc kcadm.sh.
+    location ^~ /admin {
+        return 403;
+    }
+
+    location ^~ /realms/master {
+        return 403;
+    }
+
+    # Cho phép luồng OIDC/OAuth2 + Google Broker + static resources của realm marketplace
+    location ~ ^/(realms/marketplace(/|$)|resources/|js/|robots\.txt$) {
+        set $keycloak_upstream http://keycloak:8080;
+        proxy_pass $keycloak_upstream;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host ${AUTH_DOMAIN};
+        proxy_set_header X-Forwarded-Host ${AUTH_DOMAIN};
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Forwarded "";
+        proxy_set_header X-Forwarded-Prefix "";
+
+        # Keycloak + Google OAuth sinh header/cookie lớn
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+    }
+
+    location / {
+        return 404;
+    }
+}

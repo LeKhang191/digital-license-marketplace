@@ -4,7 +4,7 @@
 
 Nhánh bàn giao: `feat/customer-license-delivery` (xác nhận commit mới nhất với người phát triển).
 
-- Thành viên infrastructure: homeserver, domain, Cloudflare Tunnel, Nginx, HTTPS, cấu hình tích hợp, callback/webhook, backup và kiểm thử triển khai.
+- Thành viên infrastructure: VPS/server, domain (DNS A/AAAA trực tiếp), Nginx, HTTPS (Let's Encrypt/Certbot), cấu hình tích hợp, callback/webhook, backup và kiểm thử triển khai (**đã bỏ Cloudflare Tunnel**).
 - Thành viên ứng dụng: UI, nghiệp vụ Catalog/Order/Wallet/License/Support, Supplier Management và các patch tiếp theo.
 - Không tự đổi stack, schema nghiệp vụ, hay merge đè code của nhau. Thống nhất trước khi sửa file Compose, gateway, cấu hình auth hoặc migration.
 
@@ -23,7 +23,7 @@ Nhánh bàn giao: `feat/customer-license-delivery` (xác nhận commit mới nh�
 | Steam metadata | Đã chạy local; kiểm tra DNS/egress server |
 | IGDB/Twitch | Tùy chọn, không chặn demo |
 | Kinguin ESA / Yard | Chờ quyền; không giao dịch tiền thật |
-| Named Tunnel | Connector laptop từng chạy HTTP/2 IPv4; chưa có hostname public hoạt động |
+| Public Reverse Proxy & HTTPS | Chuyển sang **Nginx trực tiếp trên VPS + Let's Encrypt (Certbot)** (`docker-compose.vps.yml`, `infra/nginx/vps/`), đã loại bỏ Cloudflare Tunnel |
 
 ## 3. Checklist triển khai theo thứ tự
 
@@ -31,7 +31,7 @@ Nhánh bàn giao: `feat/customer-license-delivery` (xác nhận commit mới nh�
 
 - [ ] Xác nhận branch/commit, quyền GitHub và quyền SSH homeserver.
 - [ ] Kiểm tra Docker Engine, Compose, OpenSSL, Python 3, Node/npm (theo yêu cầu frontend), dung lượng, RAM, DNS và HTTPS egress.
-- [ ] Xác nhận tài khoản Cloudflare nào có zone domain, quyền DNS/Tunnel và hostname khả dụng **trước khi tạo tunnel**. Không đổi nameserver hay DNS của ChitNChat đang hoạt động.
+- [ ] Xác nhận domain và quyền quản trị DNS (tạo bản ghi `A`/`AAAA` cho `APP_DOMAIN` và `AUTH_DOMAIN` trỏ trực tiếp về IP public của VPS/server; mở cổng firewall `80/tcp` và `443/tcp`). Không dùng Cloudflare Tunnel.
 - [ ] Chốt môi trường demo riêng, domain frontend, domain auth, hostname callback; không bật giao dịch tiền thật.
 - [ ] Chốt dùng DB demo mới hay chuyển DB laptop. Ưu tiên DB demo mới nếu không cần giữ lịch sử. Không chạy hai hệ thống DB độc lập dưới cùng hostname.
 - [ ] Nếu chuyển dữ liệu, backup PostgreSQL, Keycloak realm/volume và cấu hình bí mật đồng bộ. Bảo quản `LICENSE_ENCRYPTION_KEY`, `LICENSE_FINGERPRINT_KEY` cùng DB license; không tự sinh lại hai khóa khi restore. Giữ nhất quán `PAYMENT_INTERNAL_KEY` giữa các service.
@@ -57,14 +57,16 @@ bash scripts/configure-auth.sh
 
 Frontend: kiểm tra `frontend/.env.example`, cấu hình `VITE_API_URL=/api`, `VITE_KEYCLOAK_URL` theo hostname auth, realm `marketplace`, client `marketplace-web`. Chạy `npm ci` nếu có lockfile tương thích, rồi `npm run build` trong `frontend/`. Dùng Nginx phục vụ `dist/` và proxy `/api` đến gateway; Vite dev server chỉ dành cho test local. Không đưa secret vào biến `VITE_*`.
 
-### C. Nginx và Cloudflare
+### C. Nginx trực tiếp trên VPS và HTTPS (Let's Encrypt / Certbot — bỏ Cloudflare)
 
-- [ ] Gateway hiện map host port 8000; Keycloak host port 8081. Xác nhận bind thực tế bằng `docker compose ps` và `ss -lnt`.
-- [ ] Tận dụng `docker-compose.auth-proxy.yml`, `infra/nginx/keycloak.conf.template`, `infra/nginx/jira-webhook.conf` làm tham chiếu. Overlay hiện có phục vụ auth và Jira callback trên loopback 8002; **chưa có cấu hình full public frontend/VNPay callback hoàn chỉnh**.
-- [ ] Thiết lập Nginx frontend + `/api`, SPA fallback và auth hostname phù hợp; cập nhật issuer, redirect URI, Web Origins, CORS. Không expose cổng DB, RabbitMQ management, Keycloak admin hoặc gateway thô ra Internet.
-- [ ] Tạo/reuse Named Tunnel trong account có zone phù hợp. Nếu dùng domain ChitNChat, cần chủ zone cấp quyền hoặc tạo tunnel đúng account; không sử dụng domain tùy ý trong account trống.
-- [ ] Chạy connector trên homeserver; nếu chuyển tunnel laptop, dừng connector cũ khi cutover. Giữ token bí mật. Nếu QUIC lỗi, có thể thử HTTP/2 IPv4 như lần local trước.
-- [ ] Kiểm tra DNS public, HTTPS, frontend, login, API và route callback. Không áp Cloudflare Access challenge lên callback máy-máy; vẫn bắt buộc xác thực ở backend.
+- [ ] Gateway hiện map host port 8000; Keycloak host port 8081 ở cấu hình local. Khi triển khai VPS, dùng overlay `docker-compose.vps.yml` để khóa cả `gateway` (`127.0.0.1:8000`) và `keycloak` (`127.0.0.1:8081`) về loopback; chỉ mở cổng `80` và `443` qua container `nginx`. Xác nhận bind thực tế bằng `docker compose ps` và `ss -lnt`.
+- [ ] Cấu hình DNS bản ghi `A` (và `AAAA` nếu có IPv6) cho `APP_DOMAIN` (frontend + API + callbacks) và `AUTH_DOMAIN` (Keycloak public auth) trỏ trực tiếp về IP public của VPS.
+- [ ] Tham chiếu `infra/nginx/vps/env.vps.example` để bổ sung `COMPOSE_FILE`, `APP_DOMAIN`, `AUTH_DOMAIN`, `CERTBOT_EMAIL`, `FRONTEND_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`, `VNPAY_RETURN_URL` vào `.env` (không commit `.env`).
+- [ ] Build frontend static (`cd frontend && npm ci && npm run build` với `VITE_API_URL=/api`, `VITE_KEYCLOAK_URL=https://<AUTH_DOMAIN>`) để tạo `frontend/dist/`.
+- [ ] Chạy `bash scripts/init-vps-tls.sh` để cấp chứng chỉ Let's Encrypt qua ACME HTTP-01 (`infra/nginx/vps/bootstrap-http.conf.template`) rồi tự chuyển sang HTTPS (`infra/nginx/vps/site-https.conf.template`). Cấu hình cron gia hạn định kỳ `certbot renew` + `nginx -s reload`.
+- [ ] Chạy `bash scripts/configure-auth.sh` (bật SMTP / Google OAuth nếu có credentials) và `bash scripts/configure-vps-auth.sh` để cập nhật `redirectUris` / `webOrigins` của `marketplace-web` & `account-console` theo `APP_DOMAIN` / `AUTH_DOMAIN`.
+- [ ] Xác minh bảo mật: Nginx chặn công khai `/admin` và `/realms/master` trên `AUTH_DOMAIN` (trả `403`), chỉ quản trị Keycloak qua SSH tunnel tới `127.0.0.1:8081` hoặc `kcadm.sh`; không mở cổng PostgreSQL (`5432`), RabbitMQ (`5672`/`15672`), hay raw gateway (`8000`) ra Internet.
+- [ ] Kiểm tra DNS public, HTTPS, frontend SPA, login (kể cả Google OAuth), `/api/*`, và các route callback máy-máy (`/api/orders/vnpay-ipn` chỉ `GET`, `/api/support/webhooks/jira` chỉ `POST`). Không đặt WAF/challenge chặn callback từ VNPay hoặc Jira; xác thực chữ ký/secret bắt buộc ở backend.
 
 ### D. VNPay Sandbox
 
@@ -109,7 +111,7 @@ Thay HOSTNAME-CALLBACK bằng hostname đã kiểm tra. Kiểm tra thanh toán t
 |---|---|
 | GitHub | Mời collaborator, không chia sẻ PAT cá nhân |
 | SSH | Public key riêng của thành viên; không chia sẻ private key |
-| Cloudflare | Mời đúng account/zone, quyền tối thiểu; token tunnel chỉ đặt trên server |
+| DNS / VPS TLS | Trỏ bản ghi DNS `A`/`AAAA` trực tiếp về IP VPS; chứng chỉ quản lý tự động bằng Certbot trong volume Docker (không dùng Cloudflare Tunnel) |
 | Jira | Mời user vào project, token riêng hoặc tài khoản tích hợp |
 | Gmail SMTP | Mailbox dự án và App Password riêng; không mượn mật khẩu Gmail cá nhân |
 | Google OAuth / IGDB | Quyền project hoặc chủ tài khoản cấu hình secret trực tiếp |
@@ -131,12 +133,12 @@ Thay HOSTNAME-CALLBACK bằng hostname đã kiểm tra. Kiểm tra thanh toán t
 
 ## 6. File cần đọc
 
-- `docker-compose.yml`, `docker-compose.auth-proxy.yml`, `.env.example`
-- `infra/nginx/`, `infra/keycloak/`, `infra/migrations/`
-- `scripts/install.sh`, `scripts/configure-auth.sh`, `scripts/configure-roles.sh`, `scripts/migrate.sh`
+- `docker-compose.yml`, `docker-compose.vps.yml`, `docker-compose.auth-proxy.yml`, `.env.example`, `infra/nginx/vps/env.vps.example`
+- `infra/nginx/vps/`, `infra/keycloak/`, `infra/migrations/`
+- `scripts/install.sh`, `scripts/init-vps-tls.sh`, `scripts/configure-auth.sh`, `scripts/configure-vps-auth.sh`, `scripts/configure-roles.sh`, `scripts/migrate.sh`
 - `gateway/ocelot.json`, `frontend/.env.example`, `frontend/vite.config.ts`
 - `scripts/test-vnpay-sandbox.py`, `scripts/test-jira-integration.py`, `scripts/test-kinguin-mock-workflow.py`
 - `scripts/test-kinguin-auto-import.py` (nếu patch mới nhất đã áp dụng)
-- `docs/DATABASE_MIGRATIONS.md`
+- `docs/DATABASE_MIGRATIONS.md`, `docs/ARCHITECTURE_AND_TECH_STACK.md`, `docs/SYSTEM_FLOWS.md`, `docs/EXTERNAL_INTEGRATIONS_GUIDE.md`, `docs/PARTNER_API_DESIGN.md`
 
 Tài liệu này dựa trên ZIP source gần nhất được cung cấp và các patch sau ZIP. Không phải xác nhận server đã triển khai hoặc các patch mới đã PASS. Domain, quyền tài khoản và commit cuối cần hai thành viên xác nhận trước khi cutover.
